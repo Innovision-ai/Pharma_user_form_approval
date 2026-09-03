@@ -10,5 +10,8 @@
       "src": "/(.*)",
       "dest": "app/main.py"
     }
-  ]
+  ],
+  "env": {
+    "DATABASE_URL": "sqlite:////tmp/app.db"
+  }
 }
