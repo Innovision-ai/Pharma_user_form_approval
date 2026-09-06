@@ -13,15 +13,36 @@ class UserOut(BaseModel):
     name: str
     email: str
     department: str
+    plant: str
     role: str
     active: bool
+
+
+class UserCreate(BaseModel):
+    employee_id: str = Field(min_length=1, max_length=20)
+    name: str = Field(min_length=1, max_length=120)
+    email: EmailStr
+    department: str = Field(min_length=1, max_length=80)
+    plant: str = Field(default="P1", max_length=20)
+    role: str = Field(pattern="^(EMPLOYEE|HOD|QA|ADMIN|IT)$")
+    active: bool = True
+
+
+class UserUpdate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    email: EmailStr
+    department: str = Field(min_length=1, max_length=80)
+    plant: str = Field(max_length=20)
+    role: str = Field(pattern="^(EMPLOYEE|HOD|QA|ADMIN|IT)$")
 
 
 # ---------- Equipment ----------
 
 class EquipmentCreate(BaseModel):
     name: str = Field(min_length=1, max_length=160)
+    type: str = Field(default="Hardware", max_length=40)
     location: str = Field(min_length=1, max_length=80)
+    plant: str = Field(default="P1", max_length=20)
     allowed_roles: list[str] = Field(min_length=1)
     validation_date: date
 
@@ -43,7 +64,9 @@ class EquipmentOut(BaseModel):
 
     equipment_code: str
     name: str
+    type: str
     location: str
+    plant: str
     allowed_roles: list[str]
     validation_date: date
     active: bool

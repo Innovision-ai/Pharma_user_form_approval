@@ -4,3 +4,4 @@ sqlalchemy
 pydantic
 python-dotenv
 email-validator
+psycopg2-binary

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
-import type { AccessRequest, Notification } from "../types";
+import type { AccessRequest, AuditLog, Notification } from "../types";
 import { Card, CardBody, CardHeader, CardTitle } from "../components/ui/Card";
 import { StatusBadge } from "../components/StatusBadge";
 import { RequestTimeline } from "../components/RequestTimeline";
@@ -10,6 +10,7 @@ import { Button } from "../components/ui/Button";
 import { Modal } from "../components/ui/Modal";
 import { Field, FieldLabel, Textarea } from "../components/ui/Input";
 import { useToast } from "../components/ui/Toast";
+import { DataTable } from "../components/ui/DataTable";
 
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
@@ -28,6 +29,7 @@ export function RequestDetailPage() {
 
   const [request, setRequest] = useState<AccessRequest | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -36,6 +38,7 @@ export function RequestDetailPage() {
     if (!code) return;
     api.getRequest(code).then(setRequest);
     api.listNotifications(code).then(setNotifications);
+    api.listAudit({ request_code: code }).then(setAuditLogs);
   };
 
   useEffect(load, [code]);
@@ -158,6 +161,28 @@ export function RequestDetailPage() {
           </CardBody>
         </Card>
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Audit History</CardTitle>
+        </CardHeader>
+        <CardBody>
+          {auditLogs.length === 0 ? (
+            <p className="text-sm text-slate-500">No audit entries yet.</p>
+          ) : (
+            <DataTable
+              rows={auditLogs}
+              rowKey={(r) => `${r.timestamp}-${r.user_employee_id}-${r.action}`}
+              columns={[
+                { header: "Timestamp", render: (r) => new Date(r.timestamp).toLocaleString() },
+                { header: "User", render: (r) => `${r.user_name} (${r.user_employee_id})` },
+                { header: "Action", render: (r) => r.action },
+                { header: "Details", render: (r) => r.description },
+              ]}
+            />
+          )}
+        </CardBody>
+      </Card>
 
       <Card>
         <CardHeader>

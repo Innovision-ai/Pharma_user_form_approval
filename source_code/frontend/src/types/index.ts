@@ -14,6 +14,7 @@ export interface User {
   name: string;
   email: string;
   department: string;
+  plant: string;
   role: Role;
   active: boolean;
 }
@@ -21,7 +22,9 @@ export interface User {
 export interface Equipment {
   equipment_code: string;
   name: string;
+  type: string;
   location: string;
+  plant: string;
   allowed_roles: string[];
   validation_date: string;
   active: boolean;

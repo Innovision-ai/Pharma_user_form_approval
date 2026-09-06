@@ -15,6 +15,7 @@ class User(Base):
     name: Mapped[str] = mapped_column(String(120))
     email: Mapped[str] = mapped_column(String(160))
     department: Mapped[str] = mapped_column(String(80))
+    plant: Mapped[str] = mapped_column(String(20), default="P1")
     role: Mapped[str] = mapped_column(String(20))
     active: Mapped[bool] = mapped_column(Boolean, default=True)
 
@@ -25,7 +26,9 @@ class Equipment(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     equipment_code: Mapped[str] = mapped_column(String(20), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(160))
+    type: Mapped[str] = mapped_column(String(40), default="Hardware")
     location: Mapped[str] = mapped_column(String(80))
+    plant: Mapped[str] = mapped_column(String(20), default="P1")
     allowed_roles: Mapped[str] = mapped_column(Text)  # comma-separated role names
     validation_date: Mapped[date] = mapped_column(Date)
     active: Mapped[bool] = mapped_column(Boolean, default=True)

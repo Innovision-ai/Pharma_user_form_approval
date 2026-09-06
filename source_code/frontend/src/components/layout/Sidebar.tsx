@@ -13,6 +13,8 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/dashboard", label: "Dashboard" },
   { to: "/equipment", label: "Equipment Master", roles: ["ADMIN"] },
   { to: "/approvers", label: "Approver Master", roles: ["ADMIN"] },
+  { to: "/users", label: "User Management", roles: ["ADMIN"] },
+  { to: "/inventory", label: "Inventory Report", roles: ["ADMIN"] },
   { to: "/requests/new", label: "Create Request", roles: ["EMPLOYEE"] },
   { to: "/requests/mine", label: "My Requests", roles: ["EMPLOYEE"] },
   { to: "/approvals", label: "Approvals", roles: ["HOD", "QA"] },

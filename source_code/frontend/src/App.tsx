@@ -7,6 +7,8 @@ import { LoginPage } from "./pages/LoginPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { EquipmentMasterPage } from "./pages/EquipmentMasterPage";
 import { ApproverMasterPage } from "./pages/ApproverMasterPage";
+import { UserManagementPage } from "./pages/UserManagementPage";
+import { InventoryReportPage } from "./pages/InventoryReportPage";
 import { CreateRequestPage } from "./pages/CreateRequestPage";
 import { MyRequestsPage } from "./pages/MyRequestsPage";
 import { ApprovalsPage } from "./pages/ApprovalsPage";
@@ -38,6 +40,22 @@ export function App() {
               element={
                 <RequireRole roles={["ADMIN"]}>
                   <ApproverMasterPage />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/users"
+              element={
+                <RequireRole roles={["ADMIN"]}>
+                  <UserManagementPage />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/inventory"
+              element={
+                <RequireRole roles={["ADMIN"]}>
+                  <InventoryReportPage />
                 </RequireRole>
               }
             />

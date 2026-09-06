@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -13,10 +14,19 @@ router = APIRouter(prefix="/api/equipment", tags=["equipment"])
 
 
 @router.get("", response_model=list[EquipmentOut])
-def list_equipment(active_only: bool = False, db: Session = Depends(get_db)):
+def list_equipment(
+    active_only: bool = False,
+    plant: Optional[str] = None,
+    type: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
     q = db.query(Equipment)
     if active_only:
         q = q.filter(Equipment.active.is_(True))
+    if plant:
+        q = q.filter(Equipment.plant == plant)
+    if type:
+        q = q.filter(Equipment.type == type)
     return q.order_by(Equipment.equipment_code).all()
 
 

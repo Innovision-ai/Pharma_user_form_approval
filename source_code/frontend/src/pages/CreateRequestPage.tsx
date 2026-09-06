@@ -1,15 +1,17 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
+import { useAuth } from "../context/AuthContext";
 import type { Approver, Equipment } from "../types";
 import { Card, CardBody, CardHeader, CardTitle } from "../components/ui/Card";
-import { Field, FieldLabel, Select, Textarea } from "../components/ui/Input";
+import { Field, FieldLabel, Select, Textarea, Input } from "../components/ui/Input";
 import { Button } from "../components/ui/Button";
 import { useToast } from "../components/ui/Toast";
 
 export function CreateRequestPage() {
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const { currentUser } = useAuth();
 
   const [equipmentList, setEquipmentList] = useState<Equipment[]>([]);
   const [hods, setHods] = useState<Approver[]>([]);
@@ -23,7 +25,7 @@ export function CreateRequestPage() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    api.listEquipment(true).then(setEquipmentList);
+    api.listEquipment({ activeOnly: true }).then(setEquipmentList);
     api.listApprovers({ type: "HOD", active_only: true }).then(setHods);
     api.listApprovers({ type: "QA", active_only: true }).then(setQas);
   }, []);
@@ -61,6 +63,34 @@ export function CreateRequestPage() {
           Requests are routed to the selected HOD, then the selected QA, in that order.
         </p>
       </div>
+
+      {currentUser && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Employee Information</CardTitle>
+          </CardHeader>
+          <CardBody>
+            <div className="grid grid-cols-2 gap-4">
+              <Field>
+                <FieldLabel>Employee Name</FieldLabel>
+                <Input value={currentUser.name} disabled readOnly />
+              </Field>
+              <Field>
+                <FieldLabel>Employee ID</FieldLabel>
+                <Input value={currentUser.employee_id} disabled readOnly />
+              </Field>
+              <Field>
+                <FieldLabel>Email</FieldLabel>
+                <Input value={currentUser.email} disabled readOnly />
+              </Field>
+              <Field>
+                <FieldLabel>Department</FieldLabel>
+                <Input value={currentUser.department} disabled readOnly />
+              </Field>
+            </div>
+          </CardBody>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

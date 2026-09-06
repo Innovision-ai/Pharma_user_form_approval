@@ -6,19 +6,21 @@ import { DataTable } from "../components/ui/DataTable";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Modal } from "../components/ui/Modal";
-import { Field, FieldLabel, Input } from "../components/ui/Input";
+import { Field, FieldLabel, Input, Select } from "../components/ui/Input";
 import { useToast } from "../components/ui/Toast";
 
 const ROLE_OPTIONS = ["Analyst", "Senior Analyst", "Scientist", "Operator", "Supervisor"];
 
 interface FormState {
   name: string;
+  type: string;
   location: string;
+  plant: string;
   allowed_roles: string[];
   validation_date: string;
 }
 
-const emptyForm: FormState = { name: "", location: "", allowed_roles: [], validation_date: "" };
+const emptyForm: FormState = { name: "", type: "Hardware", location: "", plant: "P1", allowed_roles: [], validation_date: "" };
 
 export function EquipmentMasterPage() {
   const { showToast } = useToast();
@@ -38,6 +40,9 @@ export function EquipmentMasterPage() {
       .finally(() => setLoading(false));
   };
 
+  const PLANT_OPTIONS = ["P1", "P2", "P3"];
+  const TYPE_OPTIONS = ["Hardware", "Software", "Instrument", "Equipment"];
+
   useEffect(load, []);
 
   const openCreate = () => {
@@ -50,7 +55,9 @@ export function EquipmentMasterPage() {
     setEditingCode(eq.equipment_code);
     setForm({
       name: eq.name,
+      type: eq.type,
       location: eq.location,
+      plant: eq.plant,
       allowed_roles: eq.allowed_roles,
       validation_date: eq.validation_date,
     });
@@ -67,7 +74,7 @@ export function EquipmentMasterPage() {
   };
 
   const handleSave = async () => {
-    if (!form.name || !form.location || !form.validation_date || form.allowed_roles.length === 0) {
+    if (!form.name || !form.location || !form.type || !form.plant || !form.validation_date || form.allowed_roles.length === 0) {
       showToast("Please fill in all fields and select at least one role.", "error");
       return;
     }
@@ -119,7 +126,9 @@ export function EquipmentMasterPage() {
             columns={[
               { header: "Code", render: (e) => <span className="font-medium">{e.equipment_code}</span> },
               { header: "Name", render: (e) => e.name },
+              { header: "Type", render: (e) => <Badge>{e.type}</Badge> },
               { header: "Location", render: (e) => e.location },
+              { header: "Plant", render: (e) => <Badge tone="blue">{e.plant}</Badge> },
               {
                 header: "Allowed Roles",
                 render: (e) => (
@@ -180,8 +189,24 @@ export function EquipmentMasterPage() {
             <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </Field>
           <Field>
+            <FieldLabel>Type</FieldLabel>
+            <Select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
+              {TYPE_OPTIONS.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </Select>
+          </Field>
+          <Field>
             <FieldLabel>Location</FieldLabel>
             <Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
+          </Field>
+          <Field>
+            <FieldLabel>Plant</FieldLabel>
+            <Select value={form.plant} onChange={(e) => setForm({ ...form, plant: e.target.value })}>
+              {PLANT_OPTIONS.map((p) => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </Select>
           </Field>
           <Field>
             <FieldLabel>Validation Date</FieldLabel>
