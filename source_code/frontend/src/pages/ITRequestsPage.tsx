@@ -6,12 +6,18 @@ import { Card } from "../components/ui/Card";
 import { DataTable } from "../components/ui/DataTable";
 import { StatusBadge } from "../components/StatusBadge";
 import { Button } from "../components/ui/Button";
+import { Modal } from "../components/ui/Modal";
+import { Field, FieldLabel, Input } from "../components/ui/Input";
 import { useToast } from "../components/ui/Toast";
 
 export function ITRequestsPage() {
   const { showToast } = useToast();
   const [items, setItems] = useState<AccessRequest[]>([]);
   const [loading, setLoading] = useState(true);
+  const [pinOpen, setPinOpen] = useState(false);
+  const [pin, setPin] = useState("");
+  const [pendingCode, setPendingCode] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -20,13 +26,28 @@ export function ITRequestsPage() {
 
   useEffect(load, []);
 
-  const handleComplete = async (code: string) => {
+  const openPin = (code: string) => {
+    setPendingCode(code);
+    setPin("");
+    setPinOpen(true);
+  };
+
+  const handleComplete = async () => {
+    if (!pin.trim() || !pendingCode) {
+      showToast("Please enter your PIN.", "error");
+      return;
+    }
+    setBusy(true);
     try {
-      await api.completeRequest(code);
-      showToast(`${code} marked as access completed.`);
+      await api.completeRequest(pendingCode, pin);
+      showToast(`${pendingCode} marked as access completed.`);
+      setPinOpen(false);
+      setPendingCode(null);
       load();
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Failed to complete", "error");
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -61,7 +82,7 @@ export function ITRequestsPage() {
                 header: "",
                 render: (r) =>
                   r.status === "IT_PENDING" ? (
-                    <Button size="sm" onClick={() => handleComplete(r.request_code)}>
+                    <Button size="sm" onClick={() => openPin(r.request_code)}>
                       Mark Access Granted
                     </Button>
                   ) : null,
@@ -70,6 +91,38 @@ export function ITRequestsPage() {
           />
         )}
       </Card>
+
+      <Modal
+        open={pinOpen}
+        title="Authentication Required"
+        onClose={() => { setPinOpen(false); setPendingCode(null); }}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => { setPinOpen(false); setPendingCode(null); }}>
+              Cancel
+            </Button>
+            <Button onClick={handleComplete} disabled={busy}>
+              {busy ? "Verifying..." : "Confirm"}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-slate-600">
+            Enter your 4-digit PIN to confirm marking access as granted.
+          </p>
+          <Field>
+            <FieldLabel>PIN</FieldLabel>
+            <Input
+              type="password"
+              maxLength={10}
+              value={pin}
+              onChange={(e) => setPin(e.target.value)}
+              placeholder="Enter PIN"
+            />
+          </Field>
+        </div>
+      </Modal>
     </div>
   );
 }

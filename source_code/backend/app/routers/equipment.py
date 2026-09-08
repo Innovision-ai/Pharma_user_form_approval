@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.deps import get_current_user, require_role
 from app.constants import ROLE_ADMIN
-from app.models import Equipment, User
+from app.models import AuditLog, Equipment, User
 from app.schemas import EquipmentCreate, EquipmentOut, EquipmentUpdate, StatusToggle
 
 router = APIRouter(prefix="/api/equipment", tags=["equipment"])
@@ -28,6 +28,18 @@ def list_equipment(
     if type:
         q = q.filter(Equipment.type == type)
     return q.order_by(Equipment.equipment_code).all()
+
+
+def _log_audit(db: Session, user: User, action: str, description: str, request_code: Optional[str] = None) -> None:
+    log = AuditLog(
+        request_code=request_code,
+        user_employee_id=user.employee_id,
+        user_name=user.name,
+        action=action,
+        description=description,
+    )
+    db.add(log)
+    db.commit()
 
 
 def _next_equipment_code(db: Session) -> str:
@@ -61,6 +73,7 @@ def create_equipment(
     db.add(item)
     db.commit()
     db.refresh(item)
+    _log_audit(db, current_user, "EQUIPMENT_CREATED", f"Created equipment {item.equipment_code}: {item.name}")
     return item
 
 
@@ -87,6 +100,7 @@ def update_equipment(
     item.validation_date = payload.validation_date
     db.commit()
     db.refresh(item)
+    _log_audit(db, current_user, "EQUIPMENT_UPDATED", f"Updated equipment {item.equipment_code}: {item.name}")
     return item
 
 
@@ -101,4 +115,6 @@ def toggle_equipment_status(
     item.active = payload.active
     db.commit()
     db.refresh(item)
+    status_text = "activated" if item.active else "deactivated"
+    _log_audit(db, current_user, "EQUIPMENT_STATUS_CHANGED", f"Equipment {item.equipment_code} {status_text} by {current_user.name}")
     return item

@@ -17,6 +17,7 @@ class User(Base):
     department: Mapped[str] = mapped_column(String(80))
     plant: Mapped[str] = mapped_column(String(20), default="P1")
     role: Mapped[str] = mapped_column(String(20))
+    action_pin: Mapped[str] = mapped_column(String(10), default="0000")
     active: Mapped[bool] = mapped_column(Boolean, default=True)
 
 

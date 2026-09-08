@@ -8,7 +8,7 @@ import { StatusBadge } from "../components/StatusBadge";
 import { RequestTimeline } from "../components/RequestTimeline";
 import { Button } from "../components/ui/Button";
 import { Modal } from "../components/ui/Modal";
-import { Field, FieldLabel, Textarea } from "../components/ui/Input";
+import { Field, FieldLabel, Input, Textarea } from "../components/ui/Input";
 import { useToast } from "../components/ui/Toast";
 import { DataTable } from "../components/ui/DataTable";
 
@@ -32,6 +32,9 @@ export function RequestDetailPage() {
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
+  const [pinOpen, setPinOpen] = useState(false);
+  const [pin, setPin] = useState("");
+  const [pendingAction, setPendingAction] = useState<"approve" | "reject" | "complete" | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = () => {
@@ -52,49 +55,56 @@ export function RequestDetailPage() {
   const canApproveOrReject = canActOnHod || canActOnQa;
   const canComplete = currentUser.role === "IT" && request.status === "IT_PENDING";
 
-  const handleApprove = async () => {
-    setBusy(true);
-    try {
-      await api.approveRequest(request.request_code);
-      showToast("Request approved.");
-      load();
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : "Approve failed", "error");
-    } finally {
-      setBusy(false);
-    }
+  const openPinModal = (action: "approve" | "reject" | "complete") => {
+    setPendingAction(action);
+    setPin("");
+    setPinOpen(true);
   };
 
-  const handleReject = async () => {
-    if (!rejectReason.trim()) {
-      showToast("Please provide a rejection reason.", "error");
+  const executeAction = async () => {
+    if (!pin.trim()) {
+      showToast("Please enter your PIN.", "error");
       return;
     }
     setBusy(true);
     try {
-      await api.rejectRequest(request.request_code, rejectReason);
-      showToast("Request rejected.");
-      setRejectOpen(false);
+      if (pendingAction === "approve") {
+        await api.approveRequest(request!.request_code, pin);
+        showToast("Request approved.");
+      } else if (pendingAction === "reject") {
+        if (!rejectReason.trim()) {
+          showToast("Please provide a rejection reason.", "error");
+          setBusy(false);
+          return;
+        }
+        await api.rejectRequest(request!.request_code, rejectReason, pin);
+        showToast("Request rejected.");
+        setRejectOpen(false);
+      } else if (pendingAction === "complete") {
+        await api.completeRequest(request!.request_code, pin);
+        showToast("Access marked as granted.");
+      }
+      setPinOpen(false);
+      setPendingAction(null);
       load();
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "Reject failed", "error");
+      showToast(err instanceof Error ? err.message : "Action failed", "error");
     } finally {
       setBusy(false);
     }
   };
 
-  const handleComplete = async () => {
-    setBusy(true);
-    try {
-      await api.completeRequest(request.request_code);
-      showToast("Access marked as granted.");
-      load();
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : "Complete failed", "error");
-    } finally {
-      setBusy(false);
+  const handleApprove = () => openPinModal("approve");
+
+  const handleReject = () => {
+    if (!rejectReason.trim()) {
+      showToast("Please provide a rejection reason.", "error");
+      return;
     }
+    openPinModal("reject");
   };
+
+  const handleComplete = () => openPinModal("complete");
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -224,6 +234,38 @@ export function RequestDetailPage() {
           <FieldLabel>Reason for Rejection</FieldLabel>
           <Textarea rows={3} value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} />
         </Field>
+      </Modal>
+
+      <Modal
+        open={pinOpen}
+        title="Authentication Required"
+        onClose={() => { setPinOpen(false); setPendingAction(null); }}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => { setPinOpen(false); setPendingAction(null); }}>
+              Cancel
+            </Button>
+            <Button onClick={executeAction} disabled={busy}>
+              {busy ? "Verifying..." : "Confirm"}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-slate-600">
+            Enter your 4-digit PIN to confirm this action.
+          </p>
+          <Field>
+            <FieldLabel>PIN</FieldLabel>
+            <Input
+              type="password"
+              maxLength={10}
+              value={pin}
+              onChange={(e) => setPin(e.target.value)}
+              placeholder="Enter PIN"
+            />
+          </Field>
+        </div>
       </Modal>
     </div>
   );

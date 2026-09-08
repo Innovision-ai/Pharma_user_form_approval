@@ -34,8 +34,15 @@ export function Sidebar() {
   return (
     <aside className="flex h-full w-60 flex-col border-r border-slate-200 bg-white">
       <div className="border-b border-slate-100 px-5 py-5">
-        <p className="text-sm font-bold text-slate-800">Pharma Access</p>
-        <p className="text-xs text-slate-400">Equipment Management</p>
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 text-white text-xs font-bold">
+            QZ
+          </div>
+          <div>
+            <p className="text-sm font-bold text-slate-800">Qualizone</p>
+            <p className="text-xs text-slate-400">Equipment Access Management</p>
+          </div>
+        </div>
       </div>
       <nav className="flex-1 space-y-1 px-3 py-4">
         {visibleItems.map((item) => (

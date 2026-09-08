@@ -25,21 +25,21 @@ def run_seed(db: Session) -> None:
 
     users = [
         User(employee_id="EMP001", name="Yash Agrawal", email="yash@company.com",
-             department="R&D", plant="P1", role=ROLE_EMPLOYEE, active=True),
+             department="R&D", plant="P1", role=ROLE_EMPLOYEE, action_pin="1111", active=True),
         User(employee_id="HOD001", name="Amit Sharma", email="amit.sharma@company.com",
-             department="Production", plant="P1", role=ROLE_HOD, active=True),
+             department="Production", plant="P1", role=ROLE_HOD, action_pin="2222", active=True),
         User(employee_id="HOD002", name="Rahul Mehta", email="rahul.mehta@company.com",
-             department="Engineering", plant="P2", role=ROLE_HOD, active=True),
+             department="Engineering", plant="P2", role=ROLE_HOD, action_pin="3333", active=True),
         User(employee_id="HOD003", name="Neha Patel", email="neha.patel@company.com",
-             department="QC", plant="P1", role=ROLE_HOD, active=True),
+             department="QC", plant="P1", role=ROLE_HOD, action_pin="4444", active=True),
         User(employee_id="QA001", name="Priya Shah", email="priya.shah@company.com",
-             department="Quality", plant="P1", role=ROLE_QA, active=True),
+             department="Quality", plant="P1", role=ROLE_QA, action_pin="5555", active=True),
         User(employee_id="QA002", name="Ankit Kumar", email="ankit.kumar@company.com",
-             department="Quality", plant="P2", role=ROLE_QA, active=True),
+             department="Quality", plant="P2", role=ROLE_QA, action_pin="6666", active=True),
         User(employee_id="ADM001", name="System Admin", email="admin@company.com",
-             department="IT", plant="P1", role=ROLE_ADMIN, active=True),
+             department="IT", plant="P1", role=ROLE_ADMIN, action_pin="9999", active=True),
         User(employee_id="IT001", name="IT Support", email="it.support@company.com",
-             department="IT", plant="P1", role=ROLE_IT, active=True),
+             department="IT", plant="P1", role=ROLE_IT, action_pin="7777", active=True),
     ]
     db.add_all(users)
 

@@ -33,8 +33,16 @@ export function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-100 p-6">
       <div className="w-full max-w-xl rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
-        <h1 className="text-xl font-bold text-slate-900">Pharmaceutical Equipment Access Management</h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-600 text-white text-sm font-bold">
+            QZ
+          </div>
+          <div>
+            <h1 className="text-xl font-bold text-slate-900">Qualizone</h1>
+            <p className="text-sm text-slate-500">Equipment Access Management</p>
+          </div>
+        </div>
+        <p className="mt-4 text-sm text-slate-500">
           Demo mode - no password required. Pick an identity below to sign in as that user and
           explore the corresponding role's screens.
         </p>

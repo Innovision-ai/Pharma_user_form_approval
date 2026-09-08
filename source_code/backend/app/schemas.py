@@ -16,6 +16,7 @@ class UserOut(BaseModel):
     plant: str
     role: str
     active: bool
+    action_pin: str
 
 
 class UserCreate(BaseModel):
@@ -147,6 +148,11 @@ class RequestOut(BaseModel):
 
 class RejectRequest(BaseModel):
     reason: str = Field(min_length=1, max_length=2000)
+    pin: str = Field(min_length=1, max_length=10)
+
+
+class ActionPin(BaseModel):
+    pin: str = Field(min_length=1, max_length=10)
 
 
 # ---------- Audit ----------

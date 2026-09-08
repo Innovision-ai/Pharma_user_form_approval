@@ -17,6 +17,7 @@ export interface User {
   plant: string;
   role: Role;
   active: boolean;
+  action_pin: string;
 }
 
 export interface Equipment {

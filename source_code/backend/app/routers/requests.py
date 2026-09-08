@@ -8,7 +8,7 @@ from app.constants import (
 from app.database import get_db
 from app.deps import get_current_user, require_role
 from app.models import AccessRequest, User
-from app.schemas import RejectRequest, RequestCreate, RequestOut
+from app.schemas import ActionPin, RejectRequest, RequestCreate, RequestOut
 from app.services import workflow
 
 router = APIRouter(prefix="/api/requests", tags=["requests"])
@@ -92,8 +92,20 @@ def create_request(
     return workflow.submit_request(db, current_user, payload)
 
 
+def _verify_pin(user: User, pin: str) -> None:
+    from fastapi import HTTPException, status as http_status
+    if user.action_pin != pin:
+        raise HTTPException(http_status.HTTP_403_FORBIDDEN, "Invalid PIN. Action not authorized.")
+
+
 @router.post("/{code}/approve", response_model=RequestOut)
-def approve(code: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def approve(
+    code: str,
+    payload: ActionPin,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _verify_pin(current_user, payload.pin)
     return workflow.approve_request(db, current_user, code)
 
 
@@ -104,9 +116,16 @@ def reject(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _verify_pin(current_user, payload.pin)
     return workflow.reject_request(db, current_user, code, payload.reason)
 
 
 @router.post("/{code}/complete", response_model=RequestOut)
-def complete(code: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def complete(
+    code: str,
+    payload: ActionPin,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _verify_pin(current_user, payload.pin)
     return workflow.complete_request(db, current_user, code)

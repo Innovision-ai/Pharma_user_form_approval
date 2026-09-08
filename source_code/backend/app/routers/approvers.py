@@ -6,10 +6,22 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.deps import require_role
 from app.constants import ROLE_ADMIN
-from app.models import Approver, User
+from app.models import AuditLog, Approver, User
 from app.schemas import ApproverCreate, ApproverOut, ApproverUpdate, StatusToggle
 
 router = APIRouter(prefix="/api/approvers", tags=["approvers"])
+
+
+def _log_audit(db: Session, user: User, action: str, description: str, request_code: Optional[str] = None) -> None:
+    log = AuditLog(
+        request_code=request_code,
+        user_employee_id=user.employee_id,
+        user_name=user.name,
+        action=action,
+        description=description,
+    )
+    db.add(log)
+    db.commit()
 
 
 @router.get("", response_model=list[ApproverOut])
@@ -56,6 +68,7 @@ def create_approver(
     db.add(item)
     db.commit()
     db.refresh(item)
+    _log_audit(db, current_user, "APPROVER_CREATED", f"Created approver {item.approver_code}: {item.name} ({item.type})")
     return item
 
 
@@ -79,6 +92,7 @@ def update_approver(
     item.email = payload.email
     db.commit()
     db.refresh(item)
+    _log_audit(db, current_user, "APPROVER_UPDATED", f"Updated approver {item.approver_code}: {item.name}")
     return item
 
 
@@ -93,4 +107,6 @@ def toggle_approver_status(
     item.active = payload.active
     db.commit()
     db.refresh(item)
+    status_text = "activated" if item.active else "deactivated"
+    _log_audit(db, current_user, "APPROVER_STATUS_CHANGED", f"Approver {item.approver_code} {status_text} by {current_user.name}")
     return item
