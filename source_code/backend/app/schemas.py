@@ -140,15 +140,15 @@ class RequestOut(BaseModel):
     qa_email: str
     reason: str
     status: str
-    rejection_reason: Optional[str]
-    rejected_stage: Optional[str]
+    rejection_reason: Optional[str] = None
+    rejected_stage: Optional[str] = None
 
-    user_login_id: Optional[str]
-    temporary_password: Optional[str]
-    it_submitted_at: Optional[datetime]
+    user_login_id: Optional[str] = None
+    temporary_password: Optional[str] = None
+    it_submitted_at: Optional[datetime] = None
     user_acknowledged: bool
-    acknowledged_at: Optional[datetime]
-    acknowledged_by: Optional[str]
+    acknowledged_at: Optional[datetime] = None
+    acknowledged_by: Optional[str] = None
 
     created_at: datetime
     updated_at: datetime
@@ -185,7 +185,7 @@ class UserAcknowledge(BaseModel):
 class AuditLogOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    request_code: Optional[str]
+    request_code: Optional[str] = None
     user_employee_id: str
     user_name: str
     action: str
