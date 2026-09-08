@@ -50,7 +50,9 @@ def create_equipment(
     item = Equipment(
         equipment_code=_next_equipment_code(db),
         name=payload.name,
+        type=payload.type,
         location=payload.location,
+        plant=payload.plant,
         allowed_roles=",".join(payload.allowed_roles),
         validation_date=payload.validation_date,
         active=True,
@@ -78,7 +80,9 @@ def update_equipment(
 ):
     item = _get_or_404(db, code)
     item.name = payload.name
+    item.type = payload.type
     item.location = payload.location
+    item.plant = payload.plant
     item.allowed_roles = ",".join(payload.allowed_roles)
     item.validation_date = payload.validation_date
     db.commit()
