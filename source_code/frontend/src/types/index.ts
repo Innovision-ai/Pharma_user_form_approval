@@ -6,6 +6,7 @@ export type RequestStatus =
   | "PENDING_HOD"
   | "PENDING_QA"
   | "IT_PENDING"
+  | "PENDING_USER_ACK"
   | "IT_COMPLETED"
   | "REJECTED";
 
@@ -62,8 +63,23 @@ export interface AccessRequest {
   status: RequestStatus;
   rejection_reason: string | null;
   rejected_stage: "HOD" | "QA" | null;
+  user_login_id?: string | null;
+  temporary_password?: string | null;
+  it_submitted_at?: string | null;
+  user_acknowledged?: boolean;
+  acknowledged_at?: string | null;
+  acknowledged_by?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface EquipmentUser {
+  user_name: string;
+  department: string;
+  user_id: string;
+  access_granted_by: string;
+  granted_date: string;
+  status: string;
 }
 
 export interface AuditLog {

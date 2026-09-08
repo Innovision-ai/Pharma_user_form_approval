@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from app.constants import (
     ROLE_EMPLOYEE, ROLE_HOD, ROLE_IT, ROLE_QA,
     STATUS_IT_COMPLETED, STATUS_IT_PENDING, STATUS_PENDING_HOD,
-    STATUS_PENDING_QA, STATUS_REJECTED,
+    STATUS_PENDING_QA, STATUS_PENDING_USER_ACK, STATUS_REJECTED,
 )
 from app.models import AccessRequest, Approver, Equipment, User
 from app.schemas import RequestCreate
@@ -175,21 +175,61 @@ def reject_request(db: Session, current_user: User, request_code: str, reason: s
     return req
 
 
-def complete_request(db: Session, current_user: User, request_code: str) -> AccessRequest:
+def grant_access_request(db: Session, current_user: User, request_code: str, user_login_id: str, password: str, notes: Optional[str] = None) -> AccessRequest:
+    from datetime import datetime
     req = _get_request(db, request_code)
 
     if current_user.role != ROLE_IT:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only IT can complete provisioning")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only IT can grant access")
     if req.status != STATUS_IT_PENDING:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
             f"{req.request_code} is not awaiting IT provisioning (current status: {req.status})",
         )
 
+    req.status = STATUS_PENDING_USER_ACK
+    req.user_login_id = user_login_id
+    req.temporary_password = password  # In production, this should be encrypted
+    req.it_submitted_at = datetime.utcnow()
+    
+    _audit(db, req.request_code, current_user, "IT_GRANTED_ACCESS",
+           f"IT ({current_user.name}) submitted credentials for {req.request_code}")
+    _audit(db, req.request_code, current_user, "USER_ID_CREATED",
+           f"User ID {user_login_id} created for {req.employee_name}")
+    _audit(db, req.request_code, current_user, "PASSWORD_SUBMITTED",
+           f"Temporary password configured for {user_login_id}")
+    
+    # Notify user with credentials
+    notify.notify_it_completed(db, req) # Re-using this or we can add a specific notification
+    _audit(db, req.request_code, current_user, "NOTIFICATION_SENT",
+           f"Credential notification sent to {req.employee_name}")
+
+    db.commit()
+    db.refresh(req)
+    return req
+
+
+def acknowledge_request(db: Session, current_user: User, request_code: str) -> AccessRequest:
+    from datetime import datetime
+    req = _get_request(db, request_code)
+
+    if current_user.employee_id != req.employee_id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only the requester can acknowledge these credentials")
+    if req.status != STATUS_PENDING_USER_ACK:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"{req.request_code} is not awaiting user acknowledgement (current status: {req.status})",
+        )
+
     req.status = STATUS_IT_COMPLETED
-    _audit(db, req.request_code, current_user, "IT_COMPLETED",
-           f"IT ({current_user.name}) marked {req.request_code} as access completed")
-    notify.notify_it_completed(db, req)
+    req.user_acknowledged = True
+    req.acknowledged_at = datetime.utcnow()
+    req.acknowledged_by = current_user.employee_id
+
+    _audit(db, req.request_code, current_user, "USER_ACKNOWLEDGED",
+           f"User {current_user.name} acknowledged receipt of credentials")
+    _audit(db, req.request_code, current_user, "STATUS_CHANGED",
+           f"Status changed to Accepted")
 
     db.commit()
     db.refresh(req)

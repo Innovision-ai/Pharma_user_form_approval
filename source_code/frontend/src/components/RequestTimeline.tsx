@@ -6,11 +6,12 @@ const STEPS = [
   { key: "PENDING_HOD", label: "HOD Review" },
   { key: "PENDING_QA", label: "QA Review" },
   { key: "IT_PENDING", label: "IT Provisioning" },
+  { key: "PENDING_USER_ACK", label: "User Acknowledgement" },
   { key: "IT_COMPLETED", label: "Access Granted" },
 ] as const;
 
 function stepState(req: AccessRequest, stepKey: string): "done" | "current" | "upcoming" | "rejected" {
-  const order = ["SUBMITTED", "PENDING_HOD", "PENDING_QA", "IT_PENDING", "IT_COMPLETED"];
+  const order = ["SUBMITTED", "PENDING_HOD", "PENDING_QA", "IT_PENDING", "PENDING_USER_ACK", "IT_COMPLETED"];
   const currentIndex =
     req.status === "REJECTED"
       ? order.indexOf(req.rejected_stage === "HOD" ? "PENDING_HOD" : "PENDING_QA")

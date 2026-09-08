@@ -3,12 +3,12 @@ from sqlalchemy.orm import Session
 
 from app.constants import (
     ROLE_HOD, ROLE_IT, ROLE_QA,
-    STATUS_IT_COMPLETED, STATUS_IT_PENDING, STATUS_PENDING_HOD, STATUS_PENDING_QA,
+    STATUS_IT_COMPLETED, STATUS_IT_PENDING, STATUS_PENDING_HOD, STATUS_PENDING_QA, STATUS_PENDING_USER_ACK
 )
 from app.database import get_db
 from app.deps import get_current_user, require_role
 from app.models import AccessRequest, User
-from app.schemas import ActionPin, RejectRequest, RequestCreate, RequestOut
+from app.schemas import ActionAuth, RejectRequest, RequestCreate, RequestOut, ITGrantAccess, UserAcknowledge
 from app.services import workflow
 
 router = APIRouter(prefix="/api/requests", tags=["requests"])
@@ -67,7 +67,7 @@ def list_it_queue(
     """IT Requests screen - approved requests awaiting provisioning, and recently completed ones."""
     return (
         db.query(AccessRequest)
-        .filter(AccessRequest.status.in_([STATUS_IT_PENDING, STATUS_IT_COMPLETED]))
+        .filter(AccessRequest.status.in_([STATUS_IT_PENDING, STATUS_PENDING_USER_ACK, STATUS_IT_COMPLETED]))
         .order_by(AccessRequest.updated_at.desc())
         .all()
     )
@@ -92,20 +92,22 @@ def create_request(
     return workflow.submit_request(db, current_user, payload)
 
 
-def _verify_pin(user: User, pin: str) -> None:
+def _verify_auth(current_user: User, username: str, pin: str) -> None:
     from fastapi import HTTPException, status as http_status
-    if user.action_pin != pin:
+    if current_user.employee_id != username:
+        raise HTTPException(http_status.HTTP_403_FORBIDDEN, "Username mismatch. Action not authorized.")
+    if current_user.action_pin != pin:
         raise HTTPException(http_status.HTTP_403_FORBIDDEN, "Invalid PIN. Action not authorized.")
 
 
 @router.post("/{code}/approve", response_model=RequestOut)
 def approve(
     code: str,
-    payload: ActionPin,
+    payload: ActionAuth,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _verify_pin(current_user, payload.pin)
+    _verify_auth(current_user, payload.username, payload.pin)
     return workflow.approve_request(db, current_user, code)
 
 
@@ -116,16 +118,31 @@ def reject(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _verify_pin(current_user, payload.pin)
+    _verify_auth(current_user, payload.username, payload.pin)
     return workflow.reject_request(db, current_user, code, payload.reason)
 
 
-@router.post("/{code}/complete", response_model=RequestOut)
-def complete(
+@router.post("/{code}/grant", response_model=RequestOut)
+def grant_access(
     code: str,
-    payload: ActionPin,
+    payload: ITGrantAccess,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _verify_pin(current_user, payload.pin)
-    return workflow.complete_request(db, current_user, code)
+    # For IT granting access, we might still want to verify their pin if desired.
+    # The payload has a PIN field, so let's verify auth.
+    _verify_auth(current_user, current_user.employee_id, payload.pin)
+    return workflow.grant_access_request(
+        db, current_user, code, payload.user_login_id, payload.password, payload.notes
+    )
+
+
+@router.post("/{code}/acknowledge", response_model=RequestOut)
+def acknowledge(
+    code: str,
+    payload: UserAcknowledge,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _verify_auth(current_user, payload.username, payload.pin)
+    return workflow.acknowledge_request(db, current_user, code)

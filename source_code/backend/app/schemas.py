@@ -142,6 +142,14 @@ class RequestOut(BaseModel):
     status: str
     rejection_reason: Optional[str]
     rejected_stage: Optional[str]
+
+    user_login_id: Optional[str]
+    temporary_password: Optional[str]
+    it_submitted_at: Optional[datetime]
+    user_acknowledged: bool
+    acknowledged_at: Optional[datetime]
+    acknowledged_by: Optional[str]
+
     created_at: datetime
     updated_at: datetime
 
@@ -152,6 +160,23 @@ class RejectRequest(BaseModel):
 
 
 class ActionPin(BaseModel):
+    pin: str = Field(min_length=1, max_length=10)
+
+
+class ActionAuth(BaseModel):
+    username: str = Field(min_length=1, max_length=20)
+    pin: str = Field(min_length=1, max_length=10)
+
+
+class ITGrantAccess(BaseModel):
+    user_login_id: str = Field(min_length=1, max_length=100)
+    password: str = Field(min_length=1, max_length=100)
+    notes: Optional[str] = Field(default=None, max_length=2000)
+    pin: str = Field(min_length=1, max_length=10)
+
+
+class UserAcknowledge(BaseModel):
+    username: str = Field(min_length=1, max_length=20)
     pin: str = Field(min_length=1, max_length=10)
 
 

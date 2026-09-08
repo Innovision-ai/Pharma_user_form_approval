@@ -15,7 +15,11 @@ export function ITRequestsPage() {
   const [items, setItems] = useState<AccessRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [pinOpen, setPinOpen] = useState(false);
+  const [authUsername, setAuthUsername] = useState("");
   const [pin, setPin] = useState("");
+  const [userId, setUserId] = useState("");
+  const [password, setPassword] = useState("");
+  const [notes, setNotes] = useState("");
   const [pendingCode, setPendingCode] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -28,19 +32,23 @@ export function ITRequestsPage() {
 
   const openPin = (code: string) => {
     setPendingCode(code);
+    setAuthUsername("");
     setPin("");
+    setUserId("");
+    setPassword("");
+    setNotes("");
     setPinOpen(true);
   };
 
-  const handleComplete = async () => {
-    if (!pin.trim() || !pendingCode) {
-      showToast("Please enter your PIN.", "error");
+  const handleGrantAccess = async () => {
+    if (!authUsername.trim() || !pin.trim() || !pendingCode || !userId.trim() || !password.trim()) {
+      showToast("Please enter Employee ID, PIN, User ID, and Password.", "error");
       return;
     }
     setBusy(true);
     try {
-      await api.completeRequest(pendingCode, pin);
-      showToast(`${pendingCode} marked as access completed.`);
+      await api.grantAccess(pendingCode, userId, password, notes, pin);
+      showToast(`${pendingCode} credentials submitted. Awaiting user acknowledgement.`);
       setPinOpen(false);
       setPendingCode(null);
       load();
@@ -83,7 +91,7 @@ export function ITRequestsPage() {
                 render: (r) =>
                   r.status === "IT_PENDING" ? (
                     <Button size="sm" onClick={() => openPin(r.request_code)}>
-                      Mark Access Granted
+                      Grant Access
                     </Button>
                   ) : null,
               },
@@ -94,25 +102,59 @@ export function ITRequestsPage() {
 
       <Modal
         open={pinOpen}
-        title="Authentication Required"
+        title="Grant Equipment Access"
         onClose={() => { setPinOpen(false); setPendingCode(null); }}
         footer={
           <>
             <Button variant="secondary" onClick={() => { setPinOpen(false); setPendingCode(null); }}>
               Cancel
             </Button>
-            <Button onClick={handleComplete} disabled={busy}>
-              {busy ? "Verifying..." : "Confirm"}
+            <Button onClick={handleGrantAccess} disabled={busy}>
+              {busy ? "Submitting..." : "Grant Access"}
             </Button>
           </>
         }
       >
         <div className="space-y-3">
           <p className="text-sm text-slate-600">
-            Enter your 4-digit PIN to confirm marking access as granted.
+            Create credentials for this user and authenticate to grant access.
           </p>
           <Field>
-            <FieldLabel>PIN</FieldLabel>
+            <FieldLabel>New User ID *</FieldLabel>
+            <Input
+              value={userId}
+              onChange={(e) => setUserId(e.target.value)}
+              placeholder="e.g. USER-123"
+            />
+          </Field>
+          <Field>
+            <FieldLabel>Temporary Password *</FieldLabel>
+            <Input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Enter temporary password"
+            />
+          </Field>
+          <Field>
+            <FieldLabel>Notes (Optional)</FieldLabel>
+            <Input
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Any remarks..."
+            />
+          </Field>
+          <hr className="my-2" />
+          <Field>
+            <FieldLabel>Your IT Employee ID *</FieldLabel>
+            <Input
+              value={authUsername}
+              onChange={(e) => setAuthUsername(e.target.value)}
+              placeholder="Enter Employee ID"
+            />
+          </Field>
+          <Field>
+            <FieldLabel>Your PIN *</FieldLabel>
             <Input
               type="password"
               maxLength={10}

@@ -6,6 +6,7 @@ import { RequireRole } from "./components/layout/RequireRole";
 import { LoginPage } from "./pages/LoginPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { EquipmentMasterPage } from "./pages/EquipmentMasterPage";
+import { EquipmentDetailsPage } from "./pages/EquipmentDetailsPage";
 import { ApproverMasterPage } from "./pages/ApproverMasterPage";
 import { UserManagementPage } from "./pages/UserManagementPage";
 import { InventoryReportPage } from "./pages/InventoryReportPage";
@@ -35,6 +36,7 @@ export function App() {
                 </RequireRole>
               }
             />
+            <Route path="/equipment/:code" element={<EquipmentDetailsPage />} />
             <Route
               path="/approvers"
               element={

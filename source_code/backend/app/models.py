@@ -82,6 +82,13 @@ class AccessRequest(Base):
     rejection_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     rejected_stage: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
 
+    user_login_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    temporary_password: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    it_submitted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    user_acknowledged: Mapped[bool] = mapped_column(Boolean, default=False)
+    acknowledged_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    acknowledged_by: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow

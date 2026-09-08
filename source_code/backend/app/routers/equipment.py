@@ -118,3 +118,38 @@ def toggle_equipment_status(
     status_text = "activated" if item.active else "deactivated"
     _log_audit(db, current_user, "EQUIPMENT_STATUS_CHANGED", f"Equipment {item.equipment_code} {status_text} by {current_user.name}")
     return item
+
+
+@router.get("/{code}/users")
+def get_equipment_users(
+    code: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    from app.models import AccessRequest
+    from app.constants import STATUS_IT_COMPLETED
+
+    # Verify equipment exists
+    _get_or_404(db, code)
+
+    # Get all active users (IT completed)
+    reqs = (
+        db.query(AccessRequest)
+        .filter(
+            AccessRequest.equipment_code == code,
+            AccessRequest.status == STATUS_IT_COMPLETED
+        )
+        .all()
+    )
+
+    users = []
+    for r in reqs:
+        users.append({
+            "user_name": r.employee_name,
+            "department": r.employee_department,
+            "user_id": r.user_login_id or r.employee_id,
+            "access_granted_by": "IT Support", # or lookup from audit logs, but MVP standard is fine
+            "granted_date": r.it_submitted_at.isoformat() if r.it_submitted_at else r.updated_at.isoformat(),
+            "status": "Active"
+        })
+    return users

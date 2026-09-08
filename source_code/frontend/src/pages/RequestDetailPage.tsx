@@ -33,8 +33,12 @@ export function RequestDetailPage() {
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [pinOpen, setPinOpen] = useState(false);
+  const [authUsername, setAuthUsername] = useState("");
   const [pin, setPin] = useState("");
-  const [pendingAction, setPendingAction] = useState<"approve" | "reject" | "complete" | null>(null);
+  const [userId, setUserId] = useState("");
+  const [password, setPassword] = useState("");
+  const [notes, setNotes] = useState("");
+  const [pendingAction, setPendingAction] = useState<"approve" | "reject" | "grant" | "acknowledge" | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = () => {
@@ -53,23 +57,28 @@ export function RequestDetailPage() {
   const canActOnHod = currentUser.role === "HOD" && currentUser.employee_id === request.hod_id && request.status === "PENDING_HOD";
   const canActOnQa = currentUser.role === "QA" && currentUser.employee_id === request.qa_id && request.status === "PENDING_QA";
   const canApproveOrReject = canActOnHod || canActOnQa;
-  const canComplete = currentUser.role === "IT" && request.status === "IT_PENDING";
+  const canGrant = currentUser.role === "IT" && request.status === "IT_PENDING";
+  const canAcknowledge = request.status === "PENDING_USER_ACK" && currentUser.employee_id === request.employee_id;
 
-  const openPinModal = (action: "approve" | "reject" | "complete") => {
+  const openPinModal = (action: "approve" | "reject" | "grant" | "acknowledge") => {
     setPendingAction(action);
+    setAuthUsername("");
     setPin("");
+    setUserId("");
+    setPassword("");
+    setNotes("");
     setPinOpen(true);
   };
 
   const executeAction = async () => {
-    if (!pin.trim()) {
-      showToast("Please enter your PIN.", "error");
+    if (!authUsername.trim() || !pin.trim()) {
+      showToast("Please enter both username and PIN.", "error");
       return;
     }
     setBusy(true);
     try {
       if (pendingAction === "approve") {
-        await api.approveRequest(request!.request_code, pin);
+        await api.approveRequest(request!.request_code, authUsername, pin);
         showToast("Request approved.");
       } else if (pendingAction === "reject") {
         if (!rejectReason.trim()) {
@@ -77,12 +86,20 @@ export function RequestDetailPage() {
           setBusy(false);
           return;
         }
-        await api.rejectRequest(request!.request_code, rejectReason, pin);
+        await api.rejectRequest(request!.request_code, rejectReason, authUsername, pin);
         showToast("Request rejected.");
         setRejectOpen(false);
-      } else if (pendingAction === "complete") {
-        await api.completeRequest(request!.request_code, pin);
-        showToast("Access marked as granted.");
+      } else if (pendingAction === "grant") {
+        if (!userId.trim() || !password.trim()) {
+          showToast("Please enter User ID and Password.", "error");
+          setBusy(false);
+          return;
+        }
+        await api.grantAccess(request!.request_code, userId, password, notes, pin);
+        showToast("Access granted. Awaiting user acknowledgement.");
+      } else if (pendingAction === "acknowledge") {
+        await api.acknowledgeAccess(request!.request_code, authUsername, pin);
+        showToast("Access acknowledged. Request completed.");
       }
       setPinOpen(false);
       setPendingAction(null);
@@ -104,7 +121,8 @@ export function RequestDetailPage() {
     openPinModal("reject");
   };
 
-  const handleComplete = () => openPinModal("complete");
+  const handleGrant = () => openPinModal("grant");
+  const handleAcknowledge = () => openPinModal("acknowledge");
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -150,7 +168,7 @@ export function RequestDetailPage() {
         </CardBody>
       </Card>
 
-      {(canApproveOrReject || canComplete) && (
+      {(canApproveOrReject || canGrant || canAcknowledge) && (
         <Card>
           <CardBody className="flex justify-end gap-2">
             {canApproveOrReject && (
@@ -163,11 +181,53 @@ export function RequestDetailPage() {
                 </Button>
               </>
             )}
-            {canComplete && (
-              <Button onClick={handleComplete} disabled={busy}>
-                Mark Access Granted
+            {canGrant && (
+              <Button onClick={handleGrant} disabled={busy}>
+                Grant Access
               </Button>
             )}
+            {canAcknowledge && (
+              <Button onClick={handleAcknowledge} disabled={busy}>
+                Acknowledge Credentials
+              </Button>
+            )}
+          </CardBody>
+        </Card>
+      )}
+
+      {request.status === "PENDING_USER_ACK" && request.user_login_id && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Provided Credentials</CardTitle>
+          </CardHeader>
+          <CardBody>
+            <div className="space-y-4">
+              <DetailRow label="User ID" value={request.user_login_id} />
+              <div>
+                <p className="text-xs font-medium text-slate-500">Temporary Password</p>
+                <div className="flex gap-2 items-center">
+                  <Input readOnly type="text" value={request.temporary_password || ""} className="w-64" />
+                  <Button variant="secondary" onClick={() => {
+                    navigator.clipboard.writeText(request.temporary_password || "");
+                    showToast("Password copied to clipboard.");
+                  }}>Copy</Button>
+                </div>
+              </div>
+            </div>
+          </CardBody>
+        </Card>
+      )}
+
+      {request.user_acknowledged && request.acknowledged_at && (
+        <Card>
+          <CardHeader>
+            <CardTitle>User Acknowledgement</CardTitle>
+          </CardHeader>
+          <CardBody>
+            <div className="grid grid-cols-2 gap-4">
+              <DetailRow label="Acknowledged By" value={request.acknowledged_by || "-"} />
+              <DetailRow label="Date & Time" value={new Date(request.acknowledged_at).toLocaleString()} />
+            </div>
           </CardBody>
         </Card>
       )}
@@ -253,8 +313,46 @@ export function RequestDetailPage() {
       >
         <div className="space-y-3">
           <p className="text-sm text-slate-600">
-            Enter your 4-digit PIN to confirm this action.
+            Enter your Employee ID and PIN to confirm this action.
           </p>
+          {pendingAction === "grant" && (
+            <>
+              <Field>
+                <FieldLabel>New User ID *</FieldLabel>
+                <Input
+                  value={userId}
+                  onChange={(e) => setUserId(e.target.value)}
+                  placeholder="e.g. USER-123"
+                />
+              </Field>
+              <Field>
+                <FieldLabel>Temporary Password *</FieldLabel>
+                <Input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter temporary password"
+                />
+              </Field>
+              <Field>
+                <FieldLabel>Notes (Optional)</FieldLabel>
+                <Input
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Any remarks..."
+                />
+              </Field>
+              <hr className="my-2" />
+            </>
+          )}
+          <Field>
+            <FieldLabel>{pendingAction === "acknowledge" ? "Your Employee ID" : "Employee ID"}</FieldLabel>
+            <Input
+              value={authUsername}
+              onChange={(e) => setAuthUsername(e.target.value)}
+              placeholder="Enter Employee ID"
+            />
+          </Field>
           <Field>
             <FieldLabel>PIN</FieldLabel>
             <Input

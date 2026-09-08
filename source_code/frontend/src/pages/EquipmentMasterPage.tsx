@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import type { Equipment } from "../types";
 import { Card } from "../components/ui/Card";
@@ -23,6 +24,7 @@ interface FormState {
 const emptyForm: FormState = { name: "", type: "Hardware", location: "", plant: "P1", allowed_roles: [], validation_date: "" };
 
 export function EquipmentMasterPage() {
+  const navigate = useNavigate();
   const { showToast } = useToast();
   const [items, setItems] = useState<Equipment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -150,6 +152,9 @@ export function EquipmentMasterPage() {
                 header: "",
                 render: (e) => (
                   <div className="flex gap-2">
+                    <Button variant="secondary" size="sm" onClick={() => navigate(`/equipment/${e.equipment_code}`)}>
+                      View
+                    </Button>
                     <Button variant="secondary" size="sm" onClick={() => openEdit(e)}>
                       Edit
                     </Button>
