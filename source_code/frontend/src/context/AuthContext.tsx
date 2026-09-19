@@ -1,65 +1,53 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { api, setDemoUser } from "../lib/api";
+import { api, setToken } from "../lib/api";
 import type { User } from "../types";
-
-const STORAGE_KEY = "pharma-demo-user";
 
 interface AuthContextValue {
   currentUser: User | null;
-  allUsers: User[];
   loading: boolean;
-  switchUser: (employeeId: string) => Promise<void>;
+  login: (username: string, pin: string) => Promise<void>;
   logout: () => void;
-  refreshUsers: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [allUsers, setAllUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
-
-  const refreshUsers = async () => {
-    const users = await api.listUsers();
-    setAllUsers(users);
-  };
 
   useEffect(() => {
     (async () => {
       try {
-        const users = await api.listUsers();
-        setAllUsers(users);
-        const savedId = localStorage.getItem(STORAGE_KEY);
-        if (savedId) {
-          const match = users.find((u) => u.employee_id === savedId && u.active);
-          if (match) {
-            setDemoUser(match.employee_id);
-            setCurrentUser(match);
-          }
+        const token = localStorage.getItem("pharma-jwt-token");
+        if (token) {
+          setToken(token);
+          const user = await api.whoAmI();
+          setCurrentUser(user);
         }
+      } catch (err) {
+        setToken(null);
+        setCurrentUser(null);
       } finally {
         setLoading(false);
       }
     })();
   }, []);
 
-  const switchUser = async (employeeId: string) => {
-    setDemoUser(employeeId);
+  const login = async (username: string, pin: string) => {
+    const { access_token } = await api.login(username, pin);
+    setToken(access_token);
     const user = await api.whoAmI();
     setCurrentUser(user);
-    localStorage.setItem(STORAGE_KEY, employeeId);
   };
 
   const logout = () => {
-    setDemoUser(null);
+    setToken(null);
     setCurrentUser(null);
-    localStorage.removeItem(STORAGE_KEY);
   };
 
   return (
     <AuthContext.Provider
-      value={{ currentUser, allUsers, loading, switchUser, logout, refreshUsers }}
+      value={{ currentUser, loading, login, logout }}
     >
       {children}
     </AuthContext.Provider>

@@ -1,30 +1,37 @@
 from typing import Optional
-
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
+from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import User
+from app.auth import SECRET_KEY, ALGORITHM
 
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
 def get_current_user(
-    x_demo_user: Optional[str] = Header(default=None, alias="X-Demo-User"),
+    token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db),
 ) -> User:
-    """Stands in for real authentication.
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        employee_id: str = payload.get("sub")
+        if employee_id is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
 
-    The frontend's demo user switcher sends the chosen employee_id on every
-    request via this header - see README "How login works" for why this is
-    enough to demonstrate the full workflow without real auth.
-    """
-    if not x_demo_user:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "No demo user selected")
-
-    user = db.query(User).filter(User.employee_id == x_demo_user).first()
+    user = db.query(User).filter(User.employee_id == employee_id).first()
     if user is None:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Unknown demo user")
+        raise credentials_exception
     if not user.active:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "This demo user is inactive")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "This user is inactive")
     return user
 
 

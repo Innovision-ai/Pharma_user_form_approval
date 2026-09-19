@@ -4,12 +4,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import CORS_ORIGINS
 from app.database import Base, SessionLocal, engine
 from app.models import Equipment
-from app.routers import admin, approvers, audit, dashboard, equipment, notifications, requests, users
+from app.routers import admin, approvers, audit, dashboard, equipment, notifications, requests, users, auth
 from app import seed
 
 app = FastAPI(
     title="Pharmaceutical Equipment Access Management System",
-    description="MVP backend API - demo-only auth via X-Demo-User header, no real credentials.",
+    description="Production backend API with JWT Authentication.",
     version="1.0.0",
 )
 
@@ -21,6 +21,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(equipment.router)
 app.include_router(approvers.router)

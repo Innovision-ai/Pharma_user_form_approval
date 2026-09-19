@@ -18,10 +18,15 @@ export class ApiError extends Error {
   }
 }
 
-let currentDemoUser: string | null = null;
+let currentToken: string | null = localStorage.getItem("pharma-jwt-token");
 
-export function setDemoUser(employeeId: string | null) {
-  currentDemoUser = employeeId;
+export function setToken(token: string | null) {
+  currentToken = token;
+  if (token) {
+    localStorage.setItem("pharma-jwt-token", token);
+  } else {
+    localStorage.removeItem("pharma-jwt-token");
+  }
 }
 
 async function request<T>(
@@ -32,8 +37,8 @@ async function request<T>(
     "Content-Type": "application/json",
     ...(options.headers as Record<string, string> | undefined),
   };
-  if (currentDemoUser) {
-    headers["X-Demo-User"] = currentDemoUser;
+  if (currentToken) {
+    headers["Authorization"] = `Bearer ${currentToken}`;
   }
 
   const res = await fetch(`${BASE_URL}${path}`, { ...options, headers });
@@ -56,7 +61,25 @@ async function request<T>(
 }
 
 export const api = {
-  // Users / demo login
+  // Auth
+  login: async (username: string, password: string) => {
+    const formData = new URLSearchParams();
+    formData.append("username", username);
+    formData.append("password", password);
+    const res = await fetch(`${BASE_URL}/api/auth/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: formData.toString(),
+    });
+    if (!res.ok) {
+      throw new ApiError(res.status, "Login failed");
+    }
+    return res.json() as Promise<{ access_token: string; token_type: string }>;
+  },
+
+  // Users
   listUsers: (params?: { role?: string; plant?: string; active?: boolean }) => {
     const qs = new URLSearchParams();
     if (params?.role) qs.set("role", params.role);

@@ -94,9 +94,10 @@ def create_request(
 
 def _verify_auth(current_user: User, username: str, pin: str) -> None:
     from fastapi import HTTPException, status as http_status
+    from app.auth import verify_password
     if current_user.employee_id != username:
         raise HTTPException(http_status.HTTP_403_FORBIDDEN, "Username mismatch. Action not authorized.")
-    if current_user.action_pin != pin:
+    if not verify_password(pin, current_user.hashed_password):
         raise HTTPException(http_status.HTTP_403_FORBIDDEN, "Invalid PIN. Action not authorized.")
 
 

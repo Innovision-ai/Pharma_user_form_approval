@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Search, SlidersHorizontal, Plus, Eye, Pencil, Power } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import type { Equipment } from "../types";
 import { Card } from "../components/ui/Card";
 import { DataTable } from "../components/ui/DataTable";
+import { PageHeader } from "../components/ui/PageHeader";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Modal } from "../components/ui/Modal";
@@ -32,6 +34,15 @@ export function EquipmentMasterPage() {
   const [editingCode, setEditingCode] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
+
+  const filteredItems = useMemo(() => items.filter((equipment) => {
+    const haystack = `${equipment.equipment_code} ${equipment.name} ${equipment.type} ${equipment.location} ${equipment.plant}`.toLowerCase();
+    const matchesQuery = haystack.includes(query.toLowerCase());
+    const matchesStatus = statusFilter === "all" || (statusFilter === "active" ? equipment.active : !equipment.active);
+    return matchesQuery && matchesStatus;
+  }), [items, query, statusFilter]);
 
   const load = () => {
     setLoading(true);
@@ -109,21 +120,20 @@ export function EquipmentMasterPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900">Equipment Master</h1>
-          <p className="text-sm text-slate-500">Register equipment and define which roles may request access.</p>
-        </div>
-        <Button onClick={openCreate}>+ Add Equipment</Button>
+    <div className="space-y-8">
+      <PageHeader eyebrow="Administration" title="Equipment Master" description="Register validated assets and define the roles that can request access." actions={<Button onClick={openCreate}><Plus size={16} /> Add equipment</Button>} />
+      <div className="surface flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
+        <div className="relative flex-1"><Search size={16} className="absolute left-3 top-3 text-slate-400" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search equipment, location, plant..." className="pl-9" /></div>
+        <div className="flex items-center gap-2"><SlidersHorizontal size={16} className="text-slate-400" /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 outline-none focus:border-brand-500"><option value="all">All statuses</option><option value="active">Active only</option><option value="inactive">Inactive only</option></select></div>
+        <Badge tone="blue">{filteredItems.length} assets</Badge>
       </div>
 
       <Card>
         {loading ? (
-          <p className="px-5 py-10 text-center text-sm text-slate-500">Loading...</p>
+          <div className="space-y-3 p-6">{Array.from({ length: 5 }).map((_, index) => <div key={index} className="skeleton h-12" />)}</div>
         ) : (
           <DataTable
-            rows={items}
+            rows={filteredItems}
             rowKey={(e) => e.equipment_code}
             columns={[
               { header: "Code", render: (e) => <span className="font-medium">{e.equipment_code}</span> },
@@ -152,18 +162,20 @@ export function EquipmentMasterPage() {
                 header: "",
                 render: (e) => (
                   <div className="flex gap-2">
-                    <Button variant="secondary" size="sm" onClick={() => navigate(`/equipment/${e.equipment_code}`)}>
-                      View
+                    <Button variant="secondary" size="sm" aria-label={`View ${e.name}`} title="View details" onClick={() => navigate(`/equipment/${e.equipment_code}`)}>
+                      <Eye size={14} /> <span className="hidden xl:inline">View</span>
                     </Button>
-                    <Button variant="secondary" size="sm" onClick={() => openEdit(e)}>
-                      Edit
+                    <Button variant="secondary" size="sm" aria-label={`Edit ${e.name}`} title="Edit equipment" onClick={() => openEdit(e)}>
+                      <Pencil size={14} /> <span className="hidden xl:inline">Edit</span>
                     </Button>
                     <Button
                       variant={e.active ? "danger" : "secondary"}
                       size="sm"
+                      aria-label={`${e.active ? "Deactivate" : "Activate"} ${e.name}`}
+                      title={e.active ? "Deactivate" : "Activate"}
                       onClick={() => handleToggleStatus(e)}
                     >
-                      {e.active ? "Deactivate" : "Activate"}
+                      <Power size={14} /> <span className="hidden xl:inline">{e.active ? "Deactivate" : "Activate"}</span>
                     </Button>
                   </div>
                 ),
@@ -175,6 +187,7 @@ export function EquipmentMasterPage() {
 
       <Modal
         open={modalOpen}
+        placement="drawer"
         title={editingCode ? `Edit ${editingCode}` : "Add Equipment"}
         onClose={() => setModalOpen(false)}
         footer={
