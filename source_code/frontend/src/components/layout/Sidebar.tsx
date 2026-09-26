@@ -34,6 +34,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/it-queue", label: "IT Requests", icon: Settings2, roles: ["IT"] },
   { to: "/audit", label: "Audit Trail", icon: FileClock },
   { to: "/notifications", label: "Notifications", icon: Bell },
+  { to: "/uam/requests", label: "UAM Requests", icon: ClipboardCheck },
 ];
 
 interface SidebarProps {

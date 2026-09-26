@@ -96,6 +96,33 @@ class AccessRequest(Base):
     )
 
 
+class UAMRequest(Base):
+    """Generalized UAM request kept separate from the legacy access workflow."""
+    __tablename__ = "uam_requests"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    request_code: Mapped[str] = mapped_column(String(20), unique=True, index=True)
+    employee_id: Mapped[str] = mapped_column(String(20), index=True)
+    employee_name: Mapped[str] = mapped_column(String(120))
+    employee_email: Mapped[str] = mapped_column(String(160))
+    template: Mapped[str] = mapped_column(String(30))
+    asset_type: Mapped[str] = mapped_column(String(20))
+    asset_code: Mapped[str] = mapped_column(String(40), index=True)
+    requested_role: Mapped[str] = mapped_column(String(60))
+    action: Mapped[str] = mapped_column(String(30))
+    plant: Mapped[str] = mapped_column(String(20), index=True)
+    reason: Mapped[str] = mapped_column(Text)
+    form_data: Mapped[str] = mapped_column(Text, default="{}")
+    reviewer_id: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    department_approver_id: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    qa_approver_id: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    it_executor_id: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    status: Mapped[str] = mapped_column(String(40), index=True)
+    rejection_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 

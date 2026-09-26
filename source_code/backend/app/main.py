@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import CORS_ORIGINS
 from app.database import Base, SessionLocal, engine
 from app.models import Equipment
-from app.routers import admin, approvers, audit, dashboard, equipment, notifications, requests, users, auth
+from app.routers import admin, approvers, audit, dashboard, equipment, notifications, requests, users, auth, uam_requests
 from app import seed
 
 app = FastAPI(
@@ -30,6 +30,7 @@ app.include_router(audit.router)
 app.include_router(notifications.router)
 app.include_router(admin.router)
 app.include_router(dashboard.router)
+app.include_router(uam_requests.router)
 
 
 @app.on_event("startup")

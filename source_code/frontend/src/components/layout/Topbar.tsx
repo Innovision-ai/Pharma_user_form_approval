@@ -10,7 +10,7 @@ import { useToast } from "../ui/Toast";
 const ROLE_TONE: Record<string, "blue" | "amber" | "purple" | "green" | "slate"> = { EMPLOYEE: "blue", HOD: "amber", QA: "purple", IT: "green", ADMIN: "slate" };
 const TITLES: Record<string, string> = {
   "/dashboard": "Dashboard", "/equipment": "Equipment Master", "/approvers": "Approver Master", "/users": "User Management", "/inventory": "Inventory Report",
-  "/requests/new": "Create Access Request", "/requests/mine": "My Requests", "/approvals": "Approval Inbox", "/it-queue": "IT Provisioning", "/audit": "Audit Trail", "/notifications": "Notifications",
+  "/requests/new": "Create Access Request", "/requests/mine": "My Requests", "/approvals": "Approval Inbox", "/it-queue": "IT Provisioning", "/audit": "Audit Trail", "/notifications": "Notifications", "/uam/requests": "UAM Requests", "/uam/requests/new": "Create UAM Request",
 };
 
 export function Topbar({ onMenu }: { onMenu: () => void }) {

@@ -208,6 +208,60 @@ class NotificationOut(BaseModel):
     created_at: datetime
 
 
+# ---------- UAM ----------
+
+class UAMRequestCreate(BaseModel):
+    template: str = Field(pattern="^(MANUFACTURING|QC|ERP)$")
+    asset_type: str = Field(pattern="^(EQUIPMENT|SOFTWARE)$")
+    asset_code: str
+    requested_role: str
+    action: str = Field(pattern="^(CREATE|MODIFY|DEACTIVATE|ACTIVATE|UNLOCK|CHANGE_PASSWORD)$")
+    reason: str = Field(min_length=1, max_length=2000)
+    reviewer_id: Optional[str] = None
+    department_approver_id: Optional[str] = None
+    qa_approver_id: Optional[str] = None
+    it_executor_id: Optional[str] = None
+    plant: str = "P1"
+    form_data: dict = Field(default_factory=dict)
+
+
+class UAMAction(BaseModel):
+    comment: Optional[str] = Field(default=None, max_length=2000)
+    user_login_id: Optional[str] = Field(default=None, max_length=100)
+    password: Optional[str] = Field(default=None, max_length=100)
+
+
+class PlantOut(BaseModel):
+    code: str
+    name: str
+    active: bool = True
+
+
+class UAMRequestOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    request_code: str
+    employee_id: str
+    employee_name: str
+    employee_email: str
+    template: str
+    asset_type: str
+    asset_code: str
+    requested_role: str
+    action: str
+    plant: str
+    reason: str
+    status: str
+    form_data: dict = Field(default_factory=dict)
+    reviewer_id: Optional[str] = None
+    department_approver_id: Optional[str] = None
+    qa_approver_id: Optional[str] = None
+    it_executor_id: Optional[str] = None
+    rejection_reason: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+
 # ---------- Dashboard ----------
 
 class DashboardSummary(BaseModel):

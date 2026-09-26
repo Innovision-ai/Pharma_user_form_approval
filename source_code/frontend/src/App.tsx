@@ -17,6 +17,9 @@ import { ITRequestsPage } from "./pages/ITRequestsPage";
 import { RequestDetailPage } from "./pages/RequestDetailPage";
 import { AuditTrailPage } from "./pages/AuditTrailPage";
 import { NotificationsPage } from "./pages/NotificationsPage";
+import { UAMRequestsPage } from "./pages/UAMRequestsPage";
+import { CreateUAMRequestPage } from "./pages/CreateUAMRequestPage";
+import { UAMRequestDetailPage } from "./pages/UAMRequestDetailPage";
 
 export function App() {
   return (
@@ -79,6 +82,9 @@ export function App() {
               }
             />
             <Route path="/requests/:code" element={<RequestDetailPage />} />
+            <Route path="/uam/requests" element={<UAMRequestsPage />} />
+            <Route path="/uam/requests/new" element={<RequireRole roles={["EMPLOYEE", "ADMIN"]}><CreateUAMRequestPage /></RequireRole>} />
+            <Route path="/uam/requests/:code" element={<UAMRequestDetailPage />} />
 
             <Route
               path="/approvals"

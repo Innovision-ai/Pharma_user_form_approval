@@ -252,4 +252,26 @@ export const api = {
   },
   getDashboardSummary: () => request<DashboardSummary>("/api/dashboard/summary"),
   resetDemoData: () => request<{ status: string; message: string }>("/api/admin/reset", { method: "POST" }),
+
+  // Generalized UAM workflow
+  listUAMTemplates: () => request<{ templates: Array<{ code: string; asset_types: string[]; requires_qa: boolean }>; actions: string[] }>("/api/uam/requests/templates"),
+  listUAMRequests: (params?: { status?: string; plant?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.status) qs.set("status", params.status);
+    if (params?.plant) qs.set("plant", params.plant);
+    return request<import("../types").UAMRequest[]>(`/api/uam/requests?${qs.toString()}`);
+  },
+  getUAMRequest: (code: string) => request<import("../types").UAMRequest>(`/api/uam/requests/${code}`),
+  createUAMRequest: (payload: {
+    template: string; asset_type: string; asset_code: string; requested_role: string;
+    action: string; reason: string; plant: string; reviewer_id?: string;
+    department_approver_id?: string; qa_approver_id?: string; it_executor_id?: string;
+    form_data?: Record<string, unknown>;
+  }) => request<import("../types").UAMRequest>("/api/uam/requests", { method: "POST", body: JSON.stringify(payload) }),
+  approveUAMRequest: (code: string, comment?: string) => request<import("../types").UAMRequest>(`/api/uam/requests/${code}/approve`, { method: "POST", body: JSON.stringify({ comment }) }),
+  requestUAMCorrection: (code: string, comment: string) => request<import("../types").UAMRequest>(`/api/uam/requests/${code}/correction`, { method: "POST", body: JSON.stringify({ comment }) }),
+  rejectUAMRequest: (code: string, comment: string) => request<import("../types").UAMRequest>(`/api/uam/requests/${code}/reject`, { method: "POST", body: JSON.stringify({ comment }) }),
+  executeUAMRequest: (code: string, user_login_id: string, password: string, comment?: string) => request<import("../types").UAMRequest>(`/api/uam/requests/${code}/execute`, { method: "POST", body: JSON.stringify({ user_login_id, password, comment }) }),
+  acknowledgeUAMRequest: (code: string, comment?: string) => request<import("../types").UAMRequest>(`/api/uam/requests/${code}/acknowledge`, { method: "POST", body: JSON.stringify({ comment }) }),
+  cancelUAMRequest: (code: string, comment?: string) => request<import("../types").UAMRequest>(`/api/uam/requests/${code}/cancel`, { method: "POST", body: JSON.stringify({ comment }) }),
 };

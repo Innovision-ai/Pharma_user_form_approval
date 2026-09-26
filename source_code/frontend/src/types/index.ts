@@ -111,3 +111,33 @@ export interface DashboardSummary {
   it_pending: number;
   recent_requests: AccessRequest[];
 }
+
+export type UAMTemplate = "MANUFACTURING" | "QC" | "ERP";
+export type UAMAssetType = "EQUIPMENT" | "SOFTWARE";
+export type UAMAction = "CREATE" | "MODIFY" | "DEACTIVATE" | "ACTIVATE" | "UNLOCK" | "CHANGE_PASSWORD";
+export type UAMStatus = "PENDING_REVIEW" | "PENDING_DEPARTMENT_APPROVAL" | "PENDING_QA_APPROVAL" | "PENDING_EXECUTION" | "PENDING_INITIATOR_ACK" | "CORRECTION_REQUIRED" | "SUSPENDED" | "CANCELLED" | "COMPLETED" | "REJECTED";
+
+export interface UAMRequest {
+  request_code: string;
+  employee_id: string;
+  employee_name: string;
+  employee_email: string;
+  template: UAMTemplate;
+  asset_type: UAMAssetType;
+  asset_code: string;
+  requested_role: string;
+  action: UAMAction;
+  plant: string;
+  reason: string;
+  status: UAMStatus;
+  form_data: Record<string, unknown>;
+  reviewer_id: string | null;
+  department_approver_id: string | null;
+  qa_approver_id: string | null;
+  it_executor_id: string | null;
+  rejection_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Plant { code: string; name: string; active: boolean; }
