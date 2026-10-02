@@ -18,3 +18,9 @@ CORS_ORIGINS = [
 
 IT_NOTIFICATION_EMAIL = os.getenv("IT_NOTIFICATION_EMAIL", "it.support@company.com")
 
+# Vault encryption: a Fernet key. If not set, a fixed demo key is used (DO NOT use in production).
+VAULT_ENCRYPTION_KEY = os.getenv(
+    "VAULT_ENCRYPTION_KEY",
+    "XvYIkMBZ7s8F3pQw9JzH2rLnA6Td5oGe1uCm4NqbWYk=",  # demo-only key
+)
+

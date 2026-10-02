@@ -2,17 +2,22 @@ import { useEffect } from "react";
 import { NavLink } from "react-router-dom";
 import {
   Bell,
+  Calendar,
   ClipboardCheck,
   ClipboardList,
+  Database,
   FileClock,
   FlaskConical,
   Gauge,
+  HardDrive,
+  Key,
   LayoutDashboard,
   PanelLeftClose,
   PanelLeftOpen,
   Settings2,
   ShieldCheck,
   Users,
+  Wrench,
   X,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
@@ -32,9 +37,14 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/requests/mine", label: "My Requests", icon: FileClock, roles: ["EMPLOYEE"] },
   { to: "/approvals", label: "Approvals", icon: ShieldCheck, roles: ["HOD", "QA"] },
   { to: "/it-queue", label: "IT Requests", icon: Settings2, roles: ["IT"] },
+  { to: "/uam/requests", label: "UAM Requests", icon: ClipboardCheck },
+  { to: "/asset-requests", label: "Asset Requests", icon: Database },
+  { to: "/periodic-review", label: "Periodic Review", icon: Calendar, roles: ["IT", "ADMIN"] },
+  { to: "/backup-schedule", label: "Backup Schedule", icon: HardDrive, roles: ["IT", "ADMIN"] },
+  { to: "/preventive-maintenance", label: "Preventive Maint.", icon: Wrench, roles: ["IT", "ADMIN"] },
+  { to: "/vault", label: "Password Vault", icon: Key },
   { to: "/audit", label: "Audit Trail", icon: FileClock },
   { to: "/notifications", label: "Notifications", icon: Bell },
-  { to: "/uam/requests", label: "UAM Requests", icon: ClipboardCheck },
 ];
 
 interface SidebarProps {
@@ -104,4 +114,3 @@ export function Sidebar({ collapsed, mobileOpen, onClose, onToggle }: SidebarPro
     </>
   );
 }
-

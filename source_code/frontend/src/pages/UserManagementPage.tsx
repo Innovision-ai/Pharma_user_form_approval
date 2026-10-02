@@ -6,7 +6,7 @@ import { DataTable } from "../components/ui/DataTable";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Modal } from "../components/ui/Modal";
-import { Field, FieldLabel, Input, Select } from "../components/ui/Input";
+import { Field, FieldLabel, Input, Select, Textarea } from "../components/ui/Input";
 import { useToast } from "../components/ui/Toast";
 
 const ROLE_OPTIONS = ["EMPLOYEE", "HOD", "QA", "ADMIN", "IT"];
@@ -18,6 +18,7 @@ interface FormState {
   email: string;
   department: string;
   plant: string;
+  plants: string[];
   role: string;
 }
 
@@ -27,6 +28,7 @@ const emptyForm: FormState = {
   email: "",
   department: "",
   plant: "P1",
+  plants: [],
   role: "EMPLOYEE",
 };
 
@@ -38,20 +40,21 @@ export function UserManagementPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saving, setSaving] = useState(false);
-  const [filters, setFilters] = useState({
-    role: "",
-    plant: "",
-    active: "",
-  });
+  const [filters, setFilters] = useState({ role: "", plant: "", active: "" });
+
+  // Bulk deactivation
+  const [bulkTarget, setBulkTarget] = useState<User | null>(null);
+  const [bulkReason, setBulkReason] = useState("");
+  const [bulkItUser, setBulkItUser] = useState("IT001");
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const load = () => {
     setLoading(true);
-    api
-      .listUsers({
-        role: filters.role || undefined,
-        plant: filters.plant || undefined,
-        active: filters.active === "" ? undefined : filters.active === "true",
-      })
+    api.listUsers({
+      role: filters.role || undefined,
+      plant: filters.plant || undefined,
+      active: filters.active === "" ? undefined : filters.active === "true",
+    })
       .then(setItems)
       .catch((err) => showToast(err instanceof Error ? err.message : "Failed to load users", "error"))
       .finally(() => setLoading(false));
@@ -59,11 +62,7 @@ export function UserManagementPage() {
 
   useEffect(load, [filters]);
 
-  const openCreate = () => {
-    setEditingId(null);
-    setForm(emptyForm);
-    setModalOpen(true);
-  };
+  const openCreate = () => { setEditingId(null); setForm(emptyForm); setModalOpen(true); };
 
   const openEdit = (user: User) => {
     setEditingId(user.employee_id);
@@ -73,10 +72,17 @@ export function UserManagementPage() {
       email: user.email,
       department: user.department,
       plant: user.plant,
+      plants: user.plants ?? [],
       role: user.role,
     });
     setModalOpen(true);
   };
+
+  const togglePlant = (p: string) =>
+    setForm(prev => ({
+      ...prev,
+      plants: prev.plants.includes(p) ? prev.plants.filter(x => x !== p) : [...prev.plants, p],
+    }));
 
   const handleSave = async () => {
     if (!form.employee_id || !form.name || !form.email || !form.department) {
@@ -96,19 +102,25 @@ export function UserManagementPage() {
       load();
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Save failed", "error");
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
   };
 
   const handleToggleStatus = async (user: User) => {
+    try { await api.toggleUserStatus(user.employee_id); showToast(`${user.employee_id} status updated.`); load(); }
+    catch (err) { showToast(err instanceof Error ? err.message : "Update failed", "error"); }
+  };
+
+  const handleBulkDeactivate = async () => {
+    if (!bulkTarget || !bulkReason) return showToast("Reason is required", "error");
+    setBulkBusy(true);
     try {
-      await api.toggleUserStatus(user.employee_id);
-      showToast(`${user.employee_id} status updated.`);
-      load();
+      const result = await api.bulkDeactivateUser({ employee_id: bulkTarget.employee_id, it_executor_id: bulkItUser, reason: bulkReason });
+      showToast(`${result.count} deactivation request(s) created.`);
+      setBulkTarget(null);
+      setBulkReason("");
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "Update failed", "error");
-    }
+      showToast(err instanceof Error ? err.message : "Bulk deactivate failed", "error");
+    } finally { setBulkBusy(false); }
   };
 
   return (
@@ -122,37 +134,35 @@ export function UserManagementPage() {
       </div>
 
       <div className="flex gap-3">
-        <Select
-          value={filters.role}
-          onChange={(e) => setFilters({ ...filters, role: e.target.value })}
-        >
+        <Select value={filters.role} onChange={(e) => setFilters({ ...filters, role: e.target.value })}>
           <option value="">All Roles</option>
-          {ROLE_OPTIONS.map((r) => (
-            <option key={r} value={r}>
-              {r}
-            </option>
-          ))}
+          {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
         </Select>
-        <Select
-          value={filters.plant}
-          onChange={(e) => setFilters({ ...filters, plant: e.target.value })}
-        >
+        <Select value={filters.plant} onChange={(e) => setFilters({ ...filters, plant: e.target.value })}>
           <option value="">All Plants</option>
-          {PLANT_OPTIONS.map((p) => (
-            <option key={p} value={p}>
-              {p}
-            </option>
-          ))}
+          {PLANT_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
         </Select>
-        <Select
-          value={filters.active}
-          onChange={(e) => setFilters({ ...filters, active: e.target.value })}
-        >
+        <Select value={filters.active} onChange={(e) => setFilters({ ...filters, active: e.target.value })}>
           <option value="">All Status</option>
           <option value="true">Active</option>
           <option value="false">Inactive</option>
         </Select>
       </div>
+
+      {bulkTarget && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 space-y-3">
+          <p className="font-semibold text-red-800">Bulk deactivation for <span className="font-mono">{bulkTarget.employee_id}</span> — {bulkTarget.name}</p>
+          <p className="text-sm text-red-700">This will create DEACTIVATE UAM requests for all active access this user holds.</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field><FieldLabel>IT executor ID</FieldLabel><Input value={bulkItUser} onChange={e => setBulkItUser(e.target.value)} /></Field>
+            <Field><FieldLabel>Reason *</FieldLabel><Textarea rows={2} value={bulkReason} onChange={e => setBulkReason(e.target.value)} placeholder="Reason for bulk deactivation..." /></Field>
+          </div>
+          <div className="flex gap-2 justify-end">
+            <Button variant="secondary" onClick={() => setBulkTarget(null)}>Cancel</Button>
+            <Button variant="danger" disabled={bulkBusy} onClick={handleBulkDeactivate}>{bulkBusy ? "Processing..." : "Request bulk deactivation"}</Button>
+          </div>
+        </div>
+      )}
 
       <Card>
         {loading ? (
@@ -164,30 +174,19 @@ export function UserManagementPage() {
             columns={[
               { header: "Employee ID", render: (u) => <span className="font-medium">{u.employee_id}</span> },
               { header: "Name", render: (u) => u.name },
-              { header: "Email", render: (u) => u.email },
               { header: "Department", render: (u) => u.department },
-              { header: "Plant", render: (u) => <Badge>{u.plant}</Badge> },
+              { header: "Plant", render: (u) => <div className="flex flex-wrap gap-1">{(u.plants?.length ? u.plants : [u.plant]).map(p => <Badge key={p}>{p}</Badge>)}</div> },
               { header: "Role", render: (u) => <Badge tone="blue">{u.role}</Badge> },
-              {
-                header: "Status",
-                render: (u) => (
-                  <Badge tone={u.active ? "green" : "red"}>{u.active ? "Active" : "Inactive"}</Badge>
-                ),
-              },
+              { header: "Status", render: (u) => <Badge tone={u.active ? "green" : "red"}>{u.active ? "Active" : "Inactive"}</Badge> },
               {
                 header: "",
                 render: (u) => (
-                  <div className="flex gap-2">
-                    <Button variant="secondary" size="sm" onClick={() => openEdit(u)}>
-                      Edit
-                    </Button>
-                    <Button
-                      variant={u.active ? "danger" : "secondary"}
-                      size="sm"
-                      onClick={() => handleToggleStatus(u)}
-                    >
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="secondary" size="sm" onClick={() => openEdit(u)}>Edit</Button>
+                    <Button variant={u.active ? "danger" : "secondary"} size="sm" onClick={() => handleToggleStatus(u)}>
                       {u.active ? "Deactivate" : "Activate"}
                     </Button>
+                    <Button variant="danger" size="sm" onClick={() => { setBulkTarget(u); setBulkReason(""); }}>Bulk deactivate</Button>
                   </div>
                 ),
               },
@@ -202,24 +201,15 @@ export function UserManagementPage() {
         onClose={() => setModalOpen(false)}
         footer={
           <>
-            <Button variant="secondary" onClick={() => setModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSave} disabled={saving}>
-              {saving ? "Saving..." : "Save"}
-            </Button>
+            <Button variant="secondary" onClick={() => setModalOpen(false)}>Cancel</Button>
+            <Button onClick={handleSave} disabled={saving}>{saving ? "Saving..." : "Save"}</Button>
           </>
         }
       >
         <div className="space-y-4">
           <Field>
             <FieldLabel>Employee ID</FieldLabel>
-            <Input
-              value={form.employee_id}
-              disabled={!!editingId}
-              readOnly={!!editingId}
-              onChange={(e) => setForm({ ...form, employee_id: e.target.value })}
-            />
+            <Input value={form.employee_id} disabled={!!editingId} readOnly={!!editingId} onChange={(e) => setForm({ ...form, employee_id: e.target.value })} />
           </Field>
           <Field>
             <FieldLabel>Name</FieldLabel>
@@ -234,23 +224,26 @@ export function UserManagementPage() {
             <Input value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} />
           </Field>
           <Field>
-            <FieldLabel>Plant</FieldLabel>
+            <FieldLabel>Primary plant</FieldLabel>
             <Select value={form.plant} onChange={(e) => setForm({ ...form, plant: e.target.value })}>
-              {PLANT_OPTIONS.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
+              {PLANT_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
             </Select>
+          </Field>
+          <Field>
+            <FieldLabel>Plant access (multi-select)</FieldLabel>
+            <div className="flex flex-wrap gap-2 pt-1">
+              {PLANT_OPTIONS.map(p => (
+                <label key={p} className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm hover:bg-slate-50">
+                  <input type="checkbox" checked={form.plants.includes(p)} onChange={() => togglePlant(p)} className="rounded" />
+                  {p}
+                </label>
+              ))}
+            </div>
           </Field>
           <Field>
             <FieldLabel>Role</FieldLabel>
             <Select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-              {ROLE_OPTIONS.map((r) => (
-                <option key={r} value={r}>
-                  {r}
-                </option>
-              ))}
+              {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
             </Select>
           </Field>
         </div>

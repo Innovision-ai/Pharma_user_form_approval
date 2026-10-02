@@ -11,11 +11,12 @@ from app.constants import (
     UAM_STATUS_PENDING_ACK, UAM_STATUS_PENDING_DEPARTMENT,
     UAM_STATUS_PENDING_EXECUTION, UAM_STATUS_PENDING_QA,
     UAM_STATUS_PENDING_REVIEW, UAM_STATUS_REJECTED, UAM_STATUS_SUSPENDED,
+    STATUS_IT_COMPLETED,
 )
 from app.database import get_db
 from app.deps import get_current_user
 from app.models import AccessRequest, AuditLog, Equipment, UAMRequest, User
-from app.schemas import UAMAction, UAMRequestCreate, UAMRequestOut
+from app.schemas import BulkDeactivateRequest, UAMAction, UAMRequestCreate, UAMRequestOut
 from app.services import notifications as notify
 
 router = APIRouter(prefix="/api/uam/requests", tags=["uam-requests"])
@@ -229,3 +230,66 @@ def cancel(code: str, payload: UAMAction, db: Session = Depends(get_db), current
     _audit(db, req, current_user, "UAM_CANCELLED", payload.comment or "Request cancelled")
     db.commit(); db.refresh(req)
     return _out(req)
+
+
+@router.post("/bulk-deactivate")
+def bulk_deactivate(
+    payload: BulkDeactivateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role not in ("ADMIN", "HOD"):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only ADMIN or HOD can request bulk deactivation")
+
+    target = db.query(User).filter(User.employee_id == payload.employee_id).first()
+    if not target:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Target user not found")
+
+    # Find all equipment the user has access to via completed AccessRequests
+    legacy_reqs = (
+        db.query(AccessRequest)
+        .filter(
+            AccessRequest.employee_id == payload.employee_id,
+            AccessRequest.status == STATUS_IT_COMPLETED,
+        )
+        .all()
+    )
+
+    # Also find completed UAM requests
+    uam_reqs = (
+        db.query(UAMRequest)
+        .filter(
+            UAMRequest.employee_id == payload.employee_id,
+            UAMRequest.status == UAM_STATUS_COMPLETED,
+        )
+        .all()
+    )
+
+    created = []
+    seq_base = db.query(UAMRequest).count()
+
+    for i, req in enumerate(uam_reqs):
+        code = f"UAM-{(seq_base + i + 1):04d}"
+        new_req = UAMRequest(
+            request_code=code,
+            employee_id=current_user.employee_id,
+            employee_name=current_user.name,
+            employee_email=current_user.email,
+            template=req.template,
+            asset_type=req.asset_type,
+            asset_code=req.asset_code,
+            requested_role=req.requested_role,
+            action="DEACTIVATE",
+            plant=req.plant,
+            reason=payload.reason,
+            reviewer_id=req.reviewer_id,
+            department_approver_id=req.department_approver_id,
+            qa_approver_id=req.qa_approver_id,
+            it_executor_id=payload.it_executor_id,
+            status=UAM_STATUS_PENDING_REVIEW,
+        )
+        db.add(new_req)
+        created.append(code)
+
+    db.commit()
+    return {"created_requests": created, "count": len(created)}

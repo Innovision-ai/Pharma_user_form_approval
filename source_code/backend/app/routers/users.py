@@ -57,7 +57,10 @@ def create_user(
             status_code=status.HTTP_409_CONFLICT,
             detail="User with this employee ID already exists",
         )
-    user = User(**data.model_dump())
+    user_data = data.model_dump()
+    plants_list = user_data.pop("plants", [])
+    user = User(**user_data)
+    user.plants = ",".join(plants_list) if plants_list else None
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -83,8 +86,11 @@ def update_user(
     user = db.query(User).filter(User.employee_id == employee_id).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    for field, value in data.model_dump().items():
+    user_data = data.model_dump()
+    plants_list = user_data.pop("plants", [])
+    for field, value in user_data.items():
         setattr(user, field, value)
+    user.plants = ",".join(plants_list) if plants_list else None
     db.commit()
     db.refresh(user)
     _log_audit(db, current_user, "USER_UPDATED", f"Updated user {user.employee_id}: {user.name}")

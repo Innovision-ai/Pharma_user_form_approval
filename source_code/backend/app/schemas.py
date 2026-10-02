@@ -14,9 +14,19 @@ class UserOut(BaseModel):
     email: str
     department: str
     plant: str
+    plants: list[str] = Field(default_factory=list)
     role: str
     active: bool
     action_pin: str
+
+    @field_validator("plants", mode="before")
+    @classmethod
+    def split_plants(cls, v):
+        if isinstance(v, str):
+            return [p.strip() for p in v.split(",") if p.strip()]
+        if v is None:
+            return []
+        return v
 
 
 class UserCreate(BaseModel):
@@ -25,6 +35,7 @@ class UserCreate(BaseModel):
     email: EmailStr
     department: str = Field(min_length=1, max_length=80)
     plant: str = Field(default="P1", max_length=20)
+    plants: list[str] = Field(default_factory=list)
     role: str = Field(pattern="^(EMPLOYEE|HOD|QA|ADMIN|IT)$")
     active: bool = True
 
@@ -34,6 +45,7 @@ class UserUpdate(BaseModel):
     email: EmailStr
     department: str = Field(min_length=1, max_length=80)
     plant: str = Field(max_length=20)
+    plants: list[str] = Field(default_factory=list)
     role: str = Field(pattern="^(EMPLOYEE|HOD|QA|ADMIN|IT)$")
 
 
@@ -46,6 +58,21 @@ class EquipmentCreate(BaseModel):
     plant: str = Field(default="P1", max_length=20)
     allowed_roles: list[str] = Field(min_length=1)
     validation_date: date
+    # Extended computerized system fields
+    system_id: Optional[str] = None
+    system_type: Optional[str] = None
+    make: Optional[str] = None
+    model_name: Optional[str] = None
+    application_name: Optional[str] = None
+    gamp_category: Optional[str] = None
+    usp_classification: Optional[str] = None
+    validation_status: Optional[str] = None
+    initial_validation_date: Optional[date] = None
+    latest_validation_date: Optional[date] = None
+    periodic_review_frequency: Optional[int] = None
+    backup_include: bool = False
+    computer_system_id: Optional[str] = None
+    remarks: Optional[str] = None
 
     @field_validator("allowed_roles")
     @classmethod
@@ -73,6 +100,21 @@ class EquipmentOut(BaseModel):
     active: bool
     created_at: datetime
     created_by: str
+    # Extended fields
+    system_id: Optional[str] = None
+    system_type: Optional[str] = None
+    make: Optional[str] = None
+    model_name: Optional[str] = None
+    application_name: Optional[str] = None
+    gamp_category: Optional[str] = None
+    usp_classification: Optional[str] = None
+    validation_status: Optional[str] = None
+    initial_validation_date: Optional[date] = None
+    latest_validation_date: Optional[date] = None
+    periodic_review_frequency: Optional[int] = None
+    backup_include: bool = False
+    computer_system_id: Optional[str] = None
+    remarks: Optional[str] = None
 
     @field_validator("allowed_roles", mode="before")
     @classmethod
@@ -262,6 +304,179 @@ class UAMRequestOut(BaseModel):
     updated_at: datetime
 
 
+# ---------- Asset Creation Workflow ----------
+
+class AssetCreationRequestCreate(BaseModel):
+    system_name: Optional[str] = None
+    system_id: Optional[str] = None
+    system_type: Optional[str] = None
+    make: Optional[str] = None
+    model_name: Optional[str] = None
+    primary_function: Optional[str] = None
+    application_name: Optional[str] = None
+    gamp_category: Optional[str] = None
+    department: Optional[str] = None
+    location: Optional[str] = None
+    usp_classification: Optional[str] = None
+    db_server_name: Optional[str] = None
+    computer_name: Optional[str] = None
+    validation_summary_report_no: Optional[str] = None
+    approval_date: Optional[date] = None
+    change_control_no: Optional[str] = None
+    reviewer_id: Optional[str] = None
+    it_executor_id: Optional[str] = None
+    qa_approver_id: Optional[str] = None
+    plant: str = "P1"
+    form_data: dict = Field(default_factory=dict)
+
+
+class AssetCreationAction(BaseModel):
+    comment: Optional[str] = Field(default=None, max_length=2000)
+
+
+class AssetCreationRequestOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    request_code: str
+    employee_id: str
+    employee_name: str
+    employee_email: str
+    system_name: Optional[str] = None
+    system_id: Optional[str] = None
+    system_type: Optional[str] = None
+    make: Optional[str] = None
+    model_name: Optional[str] = None
+    primary_function: Optional[str] = None
+    application_name: Optional[str] = None
+    gamp_category: Optional[str] = None
+    department: Optional[str] = None
+    location: Optional[str] = None
+    usp_classification: Optional[str] = None
+    db_server_name: Optional[str] = None
+    computer_name: Optional[str] = None
+    validation_summary_report_no: Optional[str] = None
+    approval_date: Optional[date] = None
+    change_control_no: Optional[str] = None
+    reviewer_id: Optional[str] = None
+    it_executor_id: Optional[str] = None
+    qa_approver_id: Optional[str] = None
+    plant: str
+    status: str
+    rejection_reason: Optional[str] = None
+    form_data: dict = Field(default_factory=dict)
+    created_at: datetime
+    updated_at: datetime
+
+    @field_validator("form_data", mode="before")
+    @classmethod
+    def parse_form_data(cls, v):
+        if isinstance(v, str):
+            import json
+            try:
+                return json.loads(v)
+            except Exception:
+                return {}
+        return v or {}
+
+
+# ---------- Periodic Review ----------
+
+class PeriodicReviewUpdate(BaseModel):
+    last_review_date: date
+    notes: Optional[str] = None
+
+
+class PeriodicReviewOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    equipment_code: str
+    equipment_name: str
+    system_type: Optional[str] = None
+    make: Optional[str] = None
+    validation_status: Optional[str] = None
+    validation_date: Optional[date] = None
+    periodic_review_frequency: Optional[int] = None
+    last_review_date: Optional[date] = None
+    next_review_date: Optional[date] = None
+    notes: Optional[str] = None
+    updated_by: Optional[str] = None
+    updated_at: Optional[datetime] = None
+
+
+# ---------- Backup Schedule ----------
+
+class BackupScheduleUpdate(BaseModel):
+    last_backup_date: date
+    notes: Optional[str] = None
+
+
+class BackupScheduleOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    equipment_code: str
+    equipment_name: str
+    system_type: Optional[str] = None
+    make: Optional[str] = None
+    last_backup_date: Optional[date] = None
+    next_backup_date: Optional[date] = None
+    frequency_days: Optional[int] = None
+    notes: Optional[str] = None
+    updated_by: Optional[str] = None
+    updated_at: Optional[datetime] = None
+
+
+# ---------- Preventive Maintenance ----------
+
+class PMUpdate(BaseModel):
+    last_pm_date: date
+    notes: Optional[str] = None
+
+
+class PMOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    equipment_code: str
+    equipment_name: str
+    system_type: Optional[str] = None
+    computer_system_id: Optional[str] = None
+    last_pm_date: Optional[date] = None
+    next_pm_date: Optional[date] = None
+    frequency_months: Optional[int] = None
+    notes: Optional[str] = None
+    updated_by: Optional[str] = None
+    updated_at: Optional[datetime] = None
+
+
+# ---------- Password Vault ----------
+
+class VaultEntryCreate(BaseModel):
+    equipment_code: str
+    equipment_name: str
+    password: str = Field(min_length=1, max_length=200)
+    created_date: date
+    expiry_days: Optional[int] = None
+
+
+class VaultEntryUpdate(BaseModel):
+    password: str = Field(min_length=1, max_length=200)
+    expiry_days: Optional[int] = None
+
+
+class VaultEntryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    owner_employee_id: str
+    equipment_code: str
+    equipment_name: str
+    password: str = ""  # decrypted, only shown to owner
+    created_date: date
+    expiry_days: Optional[int] = None
+    expiry_date: Optional[date] = None
+    updated_at: datetime
+
+
 # ---------- Dashboard ----------
 
 class DashboardSummary(BaseModel):
@@ -272,3 +487,17 @@ class DashboardSummary(BaseModel):
     approved_requests: int
     it_pending: int
     recent_requests: list[RequestOut]
+    # User-specific
+    user_total_requests: int = 0
+    user_uam_requests: int = 0
+    user_equipment_count: int = 0
+    user_pending_actions: int = 0
+    validation_alerts: int = 0
+
+
+# ---------- Bulk Deactivation ----------
+
+class BulkDeactivateRequest(BaseModel):
+    employee_id: str
+    it_executor_id: str
+    reason: str = Field(min_length=1, max_length=2000)

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, date, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -18,6 +18,7 @@ def list_equipment(
     active_only: bool = False,
     plant: Optional[str] = None,
     type: Optional[str] = None,
+    validation_status: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
     q = db.query(Equipment)
@@ -27,7 +28,40 @@ def list_equipment(
         q = q.filter(Equipment.plant == plant)
     if type:
         q = q.filter(Equipment.type == type)
+    if validation_status:
+        q = q.filter(Equipment.validation_status == validation_status)
     return q.order_by(Equipment.equipment_code).all()
+
+
+@router.get("/validation-alerts")
+def validation_alerts(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return equipment under_validation that is >= 60 days since creation."""
+    threshold = date.today() - timedelta(days=60)
+    items = (
+        db.query(Equipment)
+        .filter(
+            Equipment.validation_status == "under_validation",
+            Equipment.active.is_(True),
+        )
+        .all()
+    )
+    alerts = []
+    for item in items:
+        created = item.created_at.date() if item.created_at else date.today()
+        days_since = (date.today() - created).days
+        if days_since >= 60:
+            alerts.append({
+                "equipment_code": item.equipment_code,
+                "name": item.name,
+                "system_type": item.system_type,
+                "validation_status": item.validation_status,
+                "days_pending": days_since,
+                "created_at": item.created_at.isoformat() if item.created_at else None,
+            })
+    return alerts
 
 
 def _log_audit(db: Session, user: User, action: str, description: str, request_code: Optional[str] = None) -> None:
@@ -53,6 +87,23 @@ def _next_equipment_code(db: Session) -> str:
     return f"EQ-{next_seq:03d}"
 
 
+def _apply_extended_fields(item: Equipment, payload: EquipmentCreate) -> None:
+    item.system_id = payload.system_id
+    item.system_type = payload.system_type
+    item.make = payload.make
+    item.model_name = payload.model_name
+    item.application_name = payload.application_name
+    item.gamp_category = payload.gamp_category
+    item.usp_classification = payload.usp_classification
+    item.validation_status = payload.validation_status
+    item.initial_validation_date = payload.initial_validation_date
+    item.latest_validation_date = payload.latest_validation_date
+    item.periodic_review_frequency = payload.periodic_review_frequency
+    item.backup_include = payload.backup_include
+    item.computer_system_id = payload.computer_system_id
+    item.remarks = payload.remarks
+
+
 @router.post("", response_model=EquipmentOut, status_code=status.HTTP_201_CREATED)
 def create_equipment(
     payload: EquipmentCreate,
@@ -70,6 +121,7 @@ def create_equipment(
         active=True,
         created_by=current_user.name,
     )
+    _apply_extended_fields(item, payload)
     db.add(item)
     db.commit()
     db.refresh(item)
@@ -82,6 +134,11 @@ def _get_or_404(db: Session, code: str) -> Equipment:
     if item is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Equipment not found")
     return item
+
+
+@router.get("/{code}", response_model=EquipmentOut)
+def get_equipment(code: str, db: Session = Depends(get_db)):
+    return _get_or_404(db, code)
 
 
 @router.put("/{code}", response_model=EquipmentOut)
@@ -98,6 +155,7 @@ def update_equipment(
     item.plant = payload.plant
     item.allowed_roles = ",".join(payload.allowed_roles)
     item.validation_date = payload.validation_date
+    _apply_extended_fields(item, payload)
     db.commit()
     db.refresh(item)
     _log_audit(db, current_user, "EQUIPMENT_UPDATED", f"Updated equipment {item.equipment_code}: {item.name}")
@@ -129,15 +187,13 @@ def get_equipment_users(
     from app.models import AccessRequest
     from app.constants import STATUS_IT_COMPLETED
 
-    # Verify equipment exists
     _get_or_404(db, code)
 
-    # Get all active users (IT completed)
     reqs = (
         db.query(AccessRequest)
         .filter(
             AccessRequest.equipment_code == code,
-            AccessRequest.status == STATUS_IT_COMPLETED
+            AccessRequest.status == STATUS_IT_COMPLETED,
         )
         .all()
     )
@@ -148,8 +204,8 @@ def get_equipment_users(
             "user_name": r.employee_name,
             "department": r.employee_department,
             "user_id": r.user_login_id or r.employee_id,
-            "access_granted_by": "IT Support", # or lookup from audit logs, but MVP standard is fine
+            "access_granted_by": "IT Support",
             "granted_date": r.it_submitted_at.isoformat() if r.it_submitted_at else r.updated_at.isoformat(),
-            "status": "Active"
+            "status": "Active",
         })
     return users

@@ -2,12 +2,14 @@ import { Badge } from "./ui/Badge";
 import type { RequestStatus } from "../types";
 
 const config: Record<string, { label: string; tone: "amber" | "blue" | "purple" | "green" | "red" | "slate" }> = {
+  // Legacy access requests
   PENDING_HOD: { label: "Pending HOD", tone: "amber" },
   PENDING_QA: { label: "Pending QA", tone: "blue" },
   IT_PENDING: { label: "IT Provisioning", tone: "purple" },
   PENDING_USER_ACK: { label: "User Acknowledgement", tone: "amber" },
   IT_COMPLETED: { label: "Access Granted", tone: "green" },
   REJECTED: { label: "Rejected", tone: "red" },
+  // UAM requests
   PENDING_REVIEW: { label: "Pending review", tone: "amber" },
   PENDING_DEPARTMENT_APPROVAL: { label: "Department approval", tone: "amber" },
   PENDING_QA_APPROVAL: { label: "QA approval", tone: "purple" },
@@ -17,6 +19,15 @@ const config: Record<string, { label: string; tone: "amber" | "blue" | "purple" 
   SUSPENDED: { label: "Suspended", tone: "amber" },
   CANCELLED: { label: "Cancelled", tone: "slate" },
   COMPLETED: { label: "Completed", tone: "green" },
+  // Asset creation workflow
+  CREATED: { label: "Created", tone: "blue" },
+  UNDER_REVIEW: { label: "Under review", tone: "amber" },
+  UNDER_IT_REVIEW: { label: "IT review", tone: "purple" },
+  UNDER_APPROVAL: { label: "QA approval", tone: "purple" },
+  APPROVED: { label: "Approved", tone: "green" },
+  // Validation
+  validated: { label: "Validated", tone: "green" },
+  under_validation: { label: "Under validation", tone: "amber" },
 };
 
 export function StatusBadge({ status }: { status: RequestStatus | string }) {
