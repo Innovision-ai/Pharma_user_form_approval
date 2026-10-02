@@ -1,0 +1,91 @@
+source_code/backend/app/routers/equipment.py
+  s_922bd87561ec9f::t_e74bbfed6adfbd 1,21,31-32,36-66,90-106,124,158,196,207,209
+  s_922bd87561ec9f::t_04ac1adbc56416 139-143
+source_code/frontend/src/pages/AssetRequestsPage.tsx
+  s_922bd87561ec9f::t_8cf74f6e8291bf 1-69
+source_code/backend/app/routers/dashboard.py
+  s_922bd87561ec9f::t_42ea8343029807 1-2,8,11-12,19-22,32-61,70-74
+source_code/backend/app/routers/uam_requests.py
+  s_922bd87561ec9f::t_f2673ef1957018 14,19
+  s_922bd87561ec9f::t_7840cc4649cd66 237
+  s_922bd87561ec9f::t_df6bdbf8aa8654 233-236,238-295
+source_code/frontend/src/pages/DashboardPage.tsx
+  s_922bd87561ec9f::t_3f71349c75a4a7 2,13,22-28,32-37,40-46,51-68,70-79,81-104
+source_code/backend/app/seed.py
+  s_922bd87561ec9f::t_c48caad8ee1141 1,9-13,17,22,29,32-33,35-36,38-39,41-42,44-45,47-48,50-51,53-54,75-139,143-163
+  s_922bd87561ec9f::t_e9a886cdbcb932 164
+source_code/frontend/src/pages/AssetRequestDetailPage.tsx
+  s_922bd87561ec9f::t_dc514f8b983406 1-122
+source_code/backend/app/routers/asset_requests.py
+  s_922bd87561ec9f::t_731fb7e646623d 1-287
+source_code/frontend/src/App.tsx
+  s_922bd87561ec9f::t_5ab17062c40736 23-29,41,43-45,47-48,50,55-65
+source_code/frontend/src/pages/CreateAssetRequestPage.tsx
+  s_922bd87561ec9f::t_febc8355d5eaf1 1-123
+source_code/frontend/src/pages/EquipmentDetailsPage.tsx
+  s_922bd87561ec9f::t_61928b9ecd572e 4,8,10-20,26-27,35-37,41-43,47-49,52-77,79-128
+source_code/frontend/src/types/index.ts
+  s_922bd87561ec9f::t_ddeecbcc580f98 19,36-50,129-133,165-273
+source_code/frontend/src/pages/PreventiveMaintenancePage.tsx
+  s_922bd87561ec9f::t_38fedcac97abd8 1-108
+source_code/frontend/src/pages/PasswordVaultPage.tsx
+  s_922bd87561ec9f::t_1dfbdbaab73e38 1-127
+source_code/backend/app/routers/password_vault.py
+  s_922bd87561ec9f::t_9f4e32b3a92c64 1-117
+source_code/backend/app/routers/preventive_maintenance.py
+  s_922bd87561ec9f::t_d4059bc47476c3 1-91
+source_code/backend/app/models.py
+  s_922bd87561ec9f::t_481daf6453cb22 19,25-30,47-62,172-270
+source_code/backend/app/constants.py
+  s_922bd87561ec9f::t_772604a485622d 64-82
+source_code/frontend/src/lib/api.ts
+  s_922bd87561ec9f::t_0fd69adb27651c 118-119
+  s_922bd87561ec9f::t_b6d53f58999024 4,6,10-11,13-14,77,80,93-98,100,104,109,112-115,117,120,122-123,132-135,137,145-146,148,150,152,154,157,159,169,190-234
+source_code/frontend/tsconfig.tsbuildinfo
+  s_922bd87561ec9f::t_3f30bc021c7157 1
+source_code/frontend/src/pages/PeriodicReviewPage.tsx
+  s_922bd87561ec9f::t_a4a7377b6673b0 1-124
+source_code/backend/app/routers/backup_schedule.py
+  s_922bd87561ec9f::t_eb50c54f48e8fe 1-85
+source_code/backend/app/routers/periodic_review.py
+  s_922bd87561ec9f::t_27d244ea3a14d8 1-113
+source_code/backend/app/routers/users.py
+  s_922bd87561ec9f::t_d2de655c34b5d1 60-63,89-91,93
+source_code/backend/requirements.txt
+  s_922bd87561ec9f::t_00f307e26440ac 5,11,14-15
+source_code/frontend/src/pages/UserManagementPage.tsx
+  s_922bd87561ec9f::t_f76003706fa238 9,21,31,43-49,53-57,65,75,81-86,105,109-115,117-120,122-123,137,139,141,143,145,152-166,178,180,184-186,189,204-205,212,227,229-237,239,241,246
+source_code/frontend/src/components/layout/Sidebar.tsx
+  s_922bd87561ec9f::t_31bf85381c27d8 5,8,12-13,20,40-45
+source_code/backend/app/config.py
+  s_922bd87561ec9f::t_438c90aff8cb46 21-26
+source_code/backend/app/main.py
+  s_922bd87561ec9f::t_a0f5163b64408a 7,9,15,36-40,45-47
+source_code/frontend/src/components/StatusBadge.tsx
+  s_922bd87561ec9f::t_cb0077796537c2 5,12,22-30
+source_code/frontend/src/pages/BackupSchedulePage.tsx
+  s_922bd87561ec9f::t_7f7cc0bd197875 1-108
+source_code/backend/app/schemas.py
+  s_922bd87561ec9f::t_2367e3962a4f90 17,22-30,38,48,61-75,103-117,307-479,490-503
+source_code/backend/app/schema_compat.py
+  s_922bd87561ec9f::t_4eb9e2b071e393 1-28,30-51
+  s_922bd87561ec9f::t_977d9a8b55997e 29
+source_code/frontend/src/pages/EquipmentMasterPage.tsx
+  s_922bd87561ec9f::t_a0ed18ab5ecc41 13,17-21,30-44,47-53,66,69,72-74,78,86,97-110,115,125,130-135,137,140,147,163-181,187,195-197,199-202,207,210,213,231-232,237-254,259-260,266-314
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "59a5935fdada0053e6a7d44df6a893e05af5c5d0",
+  "prompts": {},
+  "sessions": {
+    "s_922bd87561ec9f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e5b28f1b-b579-44fe-bda8-64f2ab923569",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "python <yash.agrawal@boomi.com>"
+    }
+  }
+}
