@@ -1,0 +1,29 @@
+.gitignore
+  s_922bd87561ec9f::t_3576839ddd1cba 19-22
+source_code/frontend/src/lib/cn.ts
+  s_da65e5e8237065::t_c6295cc20e6543 1-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "14d7f5a94c2b9f700c4742f34560fc9263ac67c9",
+  "prompts": {},
+  "sessions": {
+    "s_922bd87561ec9f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e5b28f1b-b579-44fe-bda8-64f2ab923569",
+        "model": "openai.gpt-5.6-luna"
+      },
+      "human_author": "python <yash.agrawal@boomi.com>"
+    },
+    "s_da65e5e8237065": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e6601fbd-9d72-4bce-9b39-f3693cc7fce1",
+        "model": "unknown"
+      },
+      "human_author": "python <yash.agrawal@boomi.com>"
+    }
+  }
+}
