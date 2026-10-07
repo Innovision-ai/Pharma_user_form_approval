@@ -12,6 +12,6 @@
     }
   ],
   "env": {
-    "DATABASE_URL": "sqlite:////tmp/app.db"
+    "DATABASE_URL": "postgresql://postgres:innovisionsamarth@db.llczbfzxyzbdywkivpez.supabase.co:5432/postgres"
   }
 }
