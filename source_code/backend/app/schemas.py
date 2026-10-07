@@ -198,28 +198,28 @@ class RequestOut(BaseModel):
 
 class RejectRequest(BaseModel):
     reason: str = Field(min_length=1, max_length=2000)
-    pin: str = Field(min_length=1, max_length=10)
+    pin: str = Field(min_length=1, max_length=50)
 
 
 class ActionPin(BaseModel):
-    pin: str = Field(min_length=1, max_length=10)
+    pin: str = Field(min_length=1, max_length=50)
 
 
 class ActionAuth(BaseModel):
     username: str = Field(min_length=1, max_length=20)
-    pin: str = Field(min_length=1, max_length=10)
+    pin: str = Field(min_length=1, max_length=50)
 
 
 class ITGrantAccess(BaseModel):
     user_login_id: str = Field(min_length=1, max_length=100)
     password: str = Field(min_length=1, max_length=100)
     notes: Optional[str] = Field(default=None, max_length=2000)
-    pin: str = Field(min_length=1, max_length=10)
+    pin: str = Field(min_length=1, max_length=50)
 
 
 class UserAcknowledge(BaseModel):
     username: str = Field(min_length=1, max_length=20)
-    pin: str = Field(min_length=1, max_length=10)
+    pin: str = Field(min_length=1, max_length=50)
 
 
 # ---------- Audit ----------
