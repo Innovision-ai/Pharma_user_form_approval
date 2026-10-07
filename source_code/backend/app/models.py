@@ -19,7 +19,7 @@ class User(Base):
     plants: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)  # comma-sep multi-plant
     role: Mapped[str] = mapped_column(String(20))
     hashed_password: Mapped[str] = mapped_column(String(255), default="")
-    action_pin: Mapped[str] = mapped_column(String(10), default="0000")
+    action_pin: Mapped[str] = mapped_column(String(20), default="0000")
     active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     def plants_list(self) -> list[str]:
@@ -50,7 +50,7 @@ class Equipment(Base):
     make: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     model_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     application_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    gamp_category: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)  # 1|2|3|4|5
+    gamp_category: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # 1|2|3|4|5
     usp_classification: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
     validation_status: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)  # validated|under_validation
     initial_validation_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
@@ -70,7 +70,7 @@ class Approver(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     approver_code: Mapped[str] = mapped_column(String(20), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(120))
-    type: Mapped[str] = mapped_column(String(10))  # HOD | QA
+    type: Mapped[str] = mapped_column(String(20))  # HOD | QA
     department: Mapped[str] = mapped_column(String(80))
     email: Mapped[str] = mapped_column(String(160))
     active: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -103,7 +103,7 @@ class AccessRequest(Base):
     status: Mapped[str] = mapped_column(String(20))
 
     rejection_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    rejected_stage: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    rejected_stage: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
 
     user_login_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     temporary_password: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
@@ -190,7 +190,7 @@ class AssetCreationRequest(Base):
     model_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     primary_function: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     application_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    gamp_category: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    gamp_category: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     department: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
     location: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
     usp_classification: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)

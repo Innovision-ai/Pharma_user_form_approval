@@ -12,6 +12,6 @@
     }
   ],
   "env": {
-    "DATABASE_URL": "postgresql://postgres:innovisionsamarth@db.llczbfzxyzbdywkivpez.supabase.co:5432/postgres"
+    "DATABASE_URL": "postgresql+psycopg2://postgres.llczbfzxyzbdywkivpez:Innovisionsamarth@aws-0-ap-south-1.pooler.supabase.com:6543/postgres"
   }
 }

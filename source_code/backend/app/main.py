@@ -42,16 +42,21 @@ app.include_router(password_vault.router)
 
 @app.on_event("startup")
 def on_startup():
-    # Apply SQLite-safe schema migrations for existing databases
-    ensure_compatible_schema(engine)
-    # Create any new tables
-    Base.metadata.create_all(bind=engine)
-    db = SessionLocal()
     try:
-        if db.query(Equipment).count() == 0:
-            seed.run_seed(db)
-    finally:
-        db.close()
+        # Apply SQLite-safe schema migrations for existing databases
+        ensure_compatible_schema(engine)
+        # Create any new tables
+        Base.metadata.create_all(bind=engine)
+        db = SessionLocal()
+        try:
+            if db.query(Equipment).count() == 0:
+                seed.run_seed(db)
+        finally:
+            db.close()
+    except Exception as e:
+        import traceback
+        print(f"[STARTUP WARNING] DB init error (non-fatal): {e}")
+        traceback.print_exc()
 
 
 @app.get("/api/health")
