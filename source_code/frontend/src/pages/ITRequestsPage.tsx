@@ -157,7 +157,7 @@ export function ITRequestsPage() {
             <FieldLabel>Your PIN *</FieldLabel>
             <Input
               type="password"
-              maxLength={10}
+              maxLength={50}
               value={pin}
               onChange={(e) => setPin(e.target.value)}
               placeholder="Enter PIN"
