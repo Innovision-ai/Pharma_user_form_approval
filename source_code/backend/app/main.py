@@ -1,5 +1,6 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.config import CORS_ORIGINS
 from app.database import Base, SessionLocal, engine
@@ -22,6 +23,27 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """Return JSON (with CORS headers) instead of a bare 500, so the frontend
+    shows a meaningful error rather than a generic 'Failed to fetch'."""
+    import traceback
+    traceback.print_exc()
+    headers = {}
+    origin = request.headers.get("origin")
+    if origin and origin in CORS_ORIGINS:
+        headers = {
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+            "Vary": "Origin",
+        }
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Server error: {type(exc).__name__}: {str(exc)[:300]}"},
+        headers=headers,
+    )
 
 app.include_router(auth.router)
 app.include_router(users.router)

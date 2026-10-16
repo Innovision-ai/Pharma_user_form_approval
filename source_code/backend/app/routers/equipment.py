@@ -77,13 +77,22 @@ def _log_audit(db: Session, user: User, action: str, description: str, request_c
 
 
 def _next_equipment_code(db: Session) -> str:
-    last = db.query(Equipment).order_by(Equipment.id.desc()).first()
-    next_seq = 1
-    if last is not None:
-        try:
-            next_seq = int(last.equipment_code.split("-")[1]) + 1
-        except (IndexError, ValueError):
-            next_seq = last.id + 1
+    """Return the next free EQ-### code.
+
+    Uses the highest numeric suffix among existing EQ- codes (not the last
+    inserted row, which may be e.g. SW-001) and guarantees uniqueness.
+    """
+    existing = {code for (code,) in db.query(Equipment.equipment_code).all()}
+    max_seq = 0
+    for code in existing:
+        if code and code.upper().startswith("EQ-"):
+            try:
+                max_seq = max(max_seq, int(code.split("-", 1)[1]))
+            except ValueError:
+                continue
+    next_seq = max_seq + 1
+    while f"EQ-{next_seq:03d}" in existing:
+        next_seq += 1
     return f"EQ-{next_seq:03d}"
 
 
