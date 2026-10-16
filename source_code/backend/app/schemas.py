@@ -489,6 +489,7 @@ class VaultEntryOut(BaseModel):
     expiry_days: Optional[int] = None
     expiry_date: Optional[date] = None
     updated_at: datetime
+    expiry_flag: Optional[str] = None  # e.g. 'expired' | 'expiring_in_3d'
 
 
 # ---------- Dashboard ----------

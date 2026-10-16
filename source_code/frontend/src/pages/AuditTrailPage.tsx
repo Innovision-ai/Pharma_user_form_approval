@@ -5,6 +5,9 @@ import { Card, CardBody } from "../components/ui/Card";
 import { DataTable } from "../components/ui/DataTable";
 import { Field, FieldLabel, Input } from "../components/ui/Input";
 import { Button } from "../components/ui/Button";
+import { Badge } from "../components/ui/Badge";
+import { PageHeader } from "../components/ui/PageHeader";
+import { formatDateTime } from "../lib/format";
 
 export function AuditTrailPage() {
   const [items, setItems] = useState<AuditLog[]>([]);
@@ -42,10 +45,11 @@ export function AuditTrailPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-bold text-slate-900">Audit Trail</h1>
-        <p className="text-sm text-slate-500">Complete, append-only log of every action taken in the system.</p>
-      </div>
+      <PageHeader
+        eyebrow="Compliance"
+        title="Audit Trail"
+        description="Complete, append-only log of every action taken in the system."
+      />
 
       <Card>
         <CardBody>
@@ -73,27 +77,39 @@ export function AuditTrailPage() {
           </div>
           <div className="mt-4 flex gap-2">
             <Button onClick={load}>Apply Filters</Button>
-            <Button variant="secondary" onClick={handleClear}>
-              Clear
-            </Button>
+            <Button variant="secondary" onClick={handleClear}>Clear</Button>
           </div>
         </CardBody>
       </Card>
 
       <Card>
         {loading ? (
-          <p className="px-5 py-10 text-center text-sm text-slate-500">Loading...</p>
+          <div className="space-y-3 p-6">{Array.from({ length: 6 }).map((_, i) => <div key={i} className="skeleton h-10" />)}</div>
         ) : (
           <DataTable
             rows={items}
             rowKey={(r) => `${r.timestamp}-${r.user_employee_id}-${r.action}-${r.request_code ?? "none"}`}
             emptyMessage="No audit entries match these filters."
             columns={[
-              { header: "Timestamp", render: (r) => new Date(r.timestamp).toLocaleString() },
-              { header: "Request", render: (r) => r.request_code ?? "-" },
-              { header: "User", render: (r) => `${r.user_name} (${r.user_employee_id})` },
-              { header: "Action", render: (r) => r.action },
-              { header: "Details", render: (r) => r.description },
+              { header: "Timestamp", render: (r) => <span className="whitespace-nowrap">{formatDateTime(r.timestamp)}</span> },
+              { header: "Request", render: (r) => r.request_code ? <Badge>{r.request_code}</Badge> : <span className="text-slate-400">—</span> },
+              { header: "Entity", render: (r) => r.entity ? <span className="text-sm">{r.entity}</span> : <span className="text-slate-400">—</span> },
+              { header: "User", render: (r) => <span className="whitespace-nowrap">{r.user_name} <span className="text-slate-400">({r.user_employee_id})</span></span> },
+              { header: "Action", render: (r) => <Badge tone="blue">{r.action}</Badge> },
+              { header: "Field", render: (r) => r.field_name ?? <span className="text-slate-400">—</span> },
+              {
+                header: "Old Value",
+                render: (r) => r.old_value
+                  ? <span className="rounded bg-red-50 px-1.5 py-0.5 text-xs text-red-700 font-mono">{r.old_value}</span>
+                  : <span className="text-slate-400">—</span>,
+              },
+              {
+                header: "New Value",
+                render: (r) => r.new_value
+                  ? <span className="rounded bg-green-50 px-1.5 py-0.5 text-xs text-green-700 font-mono">{r.new_value}</span>
+                  : <span className="text-slate-400">—</span>,
+              },
+              { header: "Details", render: (r) => <span className="text-sm text-slate-600">{r.description}</span> },
             ]}
           />
         )}

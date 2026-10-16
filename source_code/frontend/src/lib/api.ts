@@ -106,7 +106,7 @@ export const api = {
   },
   createUser: (payload: {
     employee_id: string; name: string; email: string; department: string;
-    plant: string; plants?: string[]; role: string; active?: boolean;
+    plant: string; plants?: string[]; role: string; active?: boolean; password?: string;
   }) => request<User>("/api/users", { method: "POST", body: JSON.stringify(payload) }),
   updateUser: (employee_id: string, payload: {
     name: string; email: string; department: string; plant: string; plants?: string[]; role: string;
@@ -116,11 +116,12 @@ export const api = {
   whoAmI: () => request<User>("/api/users/me"),
 
   // Equipment
-  listEquipment: (params?: { activeOnly?: boolean; plant?: string; type?: string; validation_status?: string }) => {
+  listEquipment: (params?: { activeOnly?: boolean; plant?: string; type?: string; system_type?: string; validation_status?: string }) => {
     const qs = new URLSearchParams();
     if (params?.activeOnly) qs.set("active_only", "true");
     if (params?.plant) qs.set("plant", params.plant);
     if (params?.type) qs.set("type", params.type);
+    if (params?.system_type) qs.set("system_type", params.system_type);
     if (params?.validation_status) qs.set("validation_status", params.validation_status);
     return request<Equipment[]>(`/api/equipment?${qs.toString()}`);
   },
@@ -224,23 +225,69 @@ export const api = {
   assetCancel: (code: string, comment?: string) => request<AssetCreationRequest>(`/api/asset-requests/${code}/cancel`, { method: "POST", body: JSON.stringify({ comment }) }),
 
   // Periodic Review
-  listPeriodicReview: () => request<PeriodicReviewRow[]>("/api/periodic-review"),
+  listPeriodicReview: (params?: { type?: string; department?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.type) qs.set("type", params.type);
+    if (params?.department) qs.set("department", params.department);
+    return request<PeriodicReviewRow[]>(`/api/periodic-review?${qs.toString()}`);
+  },
   listPeriodicReviewDue: () => request<PeriodicReviewRow[]>("/api/periodic-review/due"),
-  updateReviewDone: (code: string, last_review_date: string, notes?: string) =>
-    request<PeriodicReviewRow>(`/api/periodic-review/${code}/update-done`, { method: "PUT", body: JSON.stringify({ last_review_date, notes }) }),
+  getPeriodicReviewPlanner: (year: number, month?: number, type?: string, department?: string) => {
+    const qs = new URLSearchParams({ year: String(year) });
+    if (month) qs.set("month", String(month));
+    if (type) qs.set("type", type);
+    if (department) qs.set("department", department);
+    return request<PeriodicReviewRow[]>(`/api/periodic-review/planner?${qs.toString()}`);
+  },
+  updateReviewDone: (code: string, last_review_date: string, notes?: string, auth_password?: string) =>
+    request<PeriodicReviewRow>(`/api/periodic-review/${code}/update-done`, { method: "PUT", body: JSON.stringify({ last_review_date, notes, auth_password }) }),
 
   // Backup Schedule
-  listBackupSchedule: () => request<BackupScheduleRow[]>("/api/backup-schedule"),
-  updateBackupDone: (code: string, last_backup_date: string, frequency_days?: number, notes?: string) =>
-    request<BackupScheduleRow>(`/api/backup-schedule/${code}/update-done`, { method: "PUT", body: JSON.stringify({ last_backup_date, frequency_days: frequency_days ?? 30, notes }) }),
+  listBackupSchedule: (params?: { type?: string; department?: string; search?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.type) qs.set("type", params.type);
+    if (params?.department) qs.set("department", params.department);
+    if (params?.search) qs.set("search", params.search);
+    return request<BackupScheduleRow[]>(`/api/backup-schedule?${qs.toString()}`);
+  },
+  getBackupSchedulePlanner: (year: number, month?: number, type?: string, department?: string) => {
+    const qs = new URLSearchParams({ year: String(year) });
+    if (month) qs.set("month", String(month));
+    if (type) qs.set("type", type);
+    if (department) qs.set("department", department);
+    return request<BackupScheduleRow[]>(`/api/backup-schedule/planner?${qs.toString()}`);
+  },
+  updateBackupDone: (code: string, last_backup_date: string, frequency_days?: number, notes?: string, auth_password?: string, backup_path?: string) =>
+    request<BackupScheduleRow>(`/api/backup-schedule/${code}/update-done`, { method: "PUT", body: JSON.stringify({ last_backup_date, frequency_days: frequency_days ?? 30, notes, auth_password, backup_path }) }),
 
   // Preventive Maintenance
-  listPM: () => request<PMRow[]>("/api/preventive-maintenance"),
-  updatePMDone: (code: string, last_pm_date: string, frequency_months?: number, notes?: string) =>
-    request<PMRow>(`/api/preventive-maintenance/${code}/update-done`, { method: "PUT", body: JSON.stringify({ last_pm_date, frequency_months: frequency_months ?? 6, notes }) }),
+  listPM: (params?: { plant?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.plant) qs.set("plant", params.plant);
+    return request<PMRow[]>(`/api/preventive-maintenance?${qs.toString()}`);
+  },
+  getPMPlanner: (year: number, month?: number) => {
+    const qs = new URLSearchParams({ year: String(year) });
+    if (month) qs.set("month", String(month));
+    return request<PMRow[]>(`/api/preventive-maintenance/planner?${qs.toString()}`);
+  },
+  getPMHistory: (equipment_code: string) =>
+    request<Record<string, unknown>[]>(`/api/preventive-maintenance/history/${equipment_code}`),
+  updatePMDone: (code: string, last_pm_date: string, frequency_months?: number, notes?: string, auth_password?: string) =>
+    request<PMRow>(`/api/preventive-maintenance/${code}/update-done`, { method: "PUT", body: JSON.stringify({ last_pm_date, frequency_months: frequency_months ?? 6, notes, auth_password }) }),
+  listAdditionalPMSystems: () => request<PMRow[]>("/api/preventive-maintenance/additional"),
+  createAdditionalPMSystem: (payload: Record<string, unknown>) =>
+    request<PMRow>("/api/preventive-maintenance/additional", { method: "POST", body: JSON.stringify(payload) }),
+  updateAdditionalPMSystem: (id: number, payload: Record<string, unknown>) =>
+    request<PMRow>(`/api/preventive-maintenance/additional/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+  deleteAdditionalPMSystem: (id: number) =>
+    request<void>(`/api/preventive-maintenance/additional/${id}`, { method: "DELETE" }),
 
   // Password Vault
-  listVaultEntries: () => request<VaultEntry[]>("/api/vault"),
+  listVaultEntries: (search?: string) => {
+    const qs = search ? `?search=${encodeURIComponent(search)}` : "";
+    return request<VaultEntry[]>(`/api/vault${qs}`);
+  },
   createVaultEntry: (payload: { equipment_code: string; equipment_name: string; password: string; created_date: string; expiry_days?: number }) =>
     request<VaultEntry>("/api/vault", { method: "POST", body: JSON.stringify(payload) }),
   updateVaultEntry: (id: number, payload: { password: string; expiry_days?: number }) =>

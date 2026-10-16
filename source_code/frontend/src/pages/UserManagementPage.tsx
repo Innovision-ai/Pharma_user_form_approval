@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Search } from "lucide-react";
 import { api } from "../lib/api";
 import type { User } from "../types";
 import { Card } from "../components/ui/Card";
@@ -8,8 +9,18 @@ import { Button } from "../components/ui/Button";
 import { Modal } from "../components/ui/Modal";
 import { Field, FieldLabel, Input, Select, Textarea } from "../components/ui/Input";
 import { useToast } from "../components/ui/Toast";
+import { PageHeader } from "../components/ui/PageHeader";
+import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 
-const ROLE_OPTIONS = ["EMPLOYEE", "HOD", "QA", "ADMIN", "IT"];
+const ROLE_OPTIONS = ["EMPLOYEE", "HOD", "QA", "ADMIN", "IT", "INVENTORY_REQUESTOR"];
+const ROLE_LABELS: Record<string, string> = {
+  EMPLOYEE: "Initiator",
+  HOD: "Reviewer",
+  QA: "QA Approver",
+  ADMIN: "IT Executor",
+  IT: "IT Support",
+  INVENTORY_REQUESTOR: "Inventory Requestor",
+};
 const PLANT_OPTIONS = ["P1", "P2", "P3"];
 
 interface FormState {
@@ -20,6 +31,7 @@ interface FormState {
   plant: string;
   plants: string[];
   role: string;
+  password: string;
 }
 
 const emptyForm: FormState = {
@@ -30,6 +42,7 @@ const emptyForm: FormState = {
   plant: "P1",
   plants: [],
   role: "EMPLOYEE",
+  password: "",
 };
 
 export function UserManagementPage() {
@@ -41,6 +54,10 @@ export function UserManagementPage() {
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [filters, setFilters] = useState({ role: "", plant: "", active: "" });
+  const [search, setSearch] = useState("");
+
+  // Confirm toggle dialog
+  const [confirmToggle, setConfirmToggle] = useState<User | null>(null);
 
   // Bulk deactivation
   const [bulkTarget, setBulkTarget] = useState<User | null>(null);
@@ -62,6 +79,18 @@ export function UserManagementPage() {
 
   useEffect(load, [filters]);
 
+  // Client-side search on name/id/email/dept
+  const filtered = useMemo(() => {
+    if (!search.trim()) return items;
+    const s = search.toLowerCase();
+    return items.filter((u) =>
+      u.name.toLowerCase().includes(s) ||
+      u.employee_id.toLowerCase().includes(s) ||
+      u.email.toLowerCase().includes(s) ||
+      u.department.toLowerCase().includes(s)
+    );
+  }, [items, search]);
+
   const openCreate = () => { setEditingId(null); setForm(emptyForm); setModalOpen(true); };
 
   const openEdit = (user: User) => {
@@ -74,6 +103,7 @@ export function UserManagementPage() {
       plant: user.plant,
       plants: user.plants ?? [],
       role: user.role,
+      password: "",
     });
     setModalOpen(true);
   };
@@ -92,10 +122,12 @@ export function UserManagementPage() {
     setSaving(true);
     try {
       if (editingId) {
-        await api.updateUser(editingId, form);
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { employee_id: _eid, password: _pw, ...updateData } = form;
+        await api.updateUser(editingId, updateData);
         showToast("User updated.");
       } else {
-        await api.createUser(form);
+        await api.createUser({ ...form, password: form.password || undefined });
         showToast("User created.");
       }
       setModalOpen(false);
@@ -105,9 +137,19 @@ export function UserManagementPage() {
     } finally { setSaving(false); }
   };
 
-  const handleToggleStatus = async (user: User) => {
-    try { await api.toggleUserStatus(user.employee_id); showToast(`${user.employee_id} status updated.`); load(); }
-    catch (err) { showToast(err instanceof Error ? err.message : "Update failed", "error"); }
+  const handleToggleStatus = (user: User) => setConfirmToggle(user);
+
+  const doToggleStatus = async () => {
+    if (!confirmToggle) return;
+    const user = confirmToggle;
+    setConfirmToggle(null);
+    try {
+      await api.toggleUserStatus(user.employee_id);
+      showToast(`${user.employee_id} status updated.`);
+      load();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Update failed", "error");
+    }
   };
 
   const handleBulkDeactivate = async () => {
@@ -125,18 +167,21 @@ export function UserManagementPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900">User Management</h1>
-          <p className="text-sm text-slate-500">Create, edit, and manage system users.</p>
-        </div>
-        <Button onClick={openCreate}>+ Add User</Button>
-      </div>
+      <PageHeader
+        eyebrow="Administration"
+        title="User Management"
+        description={`${items.length} total user${items.length !== 1 ? "s" : ""} registered.`}
+        actions={<Button onClick={openCreate}>+ Add User</Button>}
+      />
 
-      <div className="flex gap-3">
+      <div className="surface flex flex-col gap-3 p-4 sm:flex-row sm:items-center flex-wrap">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search size={16} className="absolute left-3 top-3 text-slate-400" />
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name, ID, email, department..." className="pl-9" />
+        </div>
         <Select value={filters.role} onChange={(e) => setFilters({ ...filters, role: e.target.value })}>
           <option value="">All Roles</option>
-          {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+          {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{ROLE_LABELS[r] ?? r}</option>)}
         </Select>
         <Select value={filters.plant} onChange={(e) => setFilters({ ...filters, plant: e.target.value })}>
           <option value="">All Plants</option>
@@ -147,6 +192,7 @@ export function UserManagementPage() {
           <option value="true">Active</option>
           <option value="false">Inactive</option>
         </Select>
+        <Badge tone="blue">{filtered.length} shown</Badge>
       </div>
 
       {bulkTarget && (
@@ -166,17 +212,17 @@ export function UserManagementPage() {
 
       <Card>
         {loading ? (
-          <p className="px-5 py-10 text-center text-sm text-slate-500">Loading...</p>
+          <div className="space-y-3 p-6">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="skeleton h-12" />)}</div>
         ) : (
           <DataTable
-            rows={items}
+            rows={filtered}
             rowKey={(u) => u.employee_id}
             columns={[
               { header: "Employee ID", render: (u) => <span className="font-medium">{u.employee_id}</span> },
               { header: "Name", render: (u) => u.name },
               { header: "Department", render: (u) => u.department },
               { header: "Plant", render: (u) => <div className="flex flex-wrap gap-1">{(u.plants?.length ? u.plants : [u.plant]).map(p => <Badge key={p}>{p}</Badge>)}</div> },
-              { header: "Role", render: (u) => <Badge tone="blue">{u.role}</Badge> },
+              { header: "Role", render: (u) => <Badge tone="blue">{ROLE_LABELS[u.role] ?? u.role}</Badge> },
               { header: "Status", render: (u) => <Badge tone={u.active ? "green" : "red"}>{u.active ? "Active" : "Inactive"}</Badge> },
               {
                 header: "",
@@ -195,6 +241,19 @@ export function UserManagementPage() {
         )}
       </Card>
 
+      {/* Confirm status toggle dialog */}
+      {confirmToggle && (
+        <ConfirmDialog
+          open={true}
+          title={confirmToggle.active ? "Deactivate user?" : "Activate user?"}
+          message={`Do you want to ${confirmToggle.active ? "deactivate" : "activate"} user ${confirmToggle.employee_id} (${confirmToggle.name})?`}
+          confirmLabel={confirmToggle.active ? "Yes, deactivate" : "Yes, activate"}
+          danger={confirmToggle.active}
+          onConfirm={doToggleStatus}
+          onCancel={() => setConfirmToggle(null)}
+        />
+      )}
+
       <Modal
         open={modalOpen}
         title={editingId ? `Edit ${editingId}` : "Add User"}
@@ -208,19 +267,19 @@ export function UserManagementPage() {
       >
         <div className="space-y-4">
           <Field>
-            <FieldLabel>Employee ID</FieldLabel>
+            <FieldLabel>Employee ID *</FieldLabel>
             <Input value={form.employee_id} disabled={!!editingId} readOnly={!!editingId} onChange={(e) => setForm({ ...form, employee_id: e.target.value })} />
           </Field>
           <Field>
-            <FieldLabel>Name</FieldLabel>
+            <FieldLabel>Name *</FieldLabel>
             <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </Field>
           <Field>
-            <FieldLabel>Email</FieldLabel>
+            <FieldLabel>Email *</FieldLabel>
             <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
           </Field>
           <Field>
-            <FieldLabel>Department</FieldLabel>
+            <FieldLabel>Department *</FieldLabel>
             <Input value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} />
           </Field>
           <Field>
@@ -243,9 +302,22 @@ export function UserManagementPage() {
           <Field>
             <FieldLabel>Role</FieldLabel>
             <Select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-              {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+              {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{ROLE_LABELS[r] ?? r} ({r})</option>)}
             </Select>
           </Field>
+          {!editingId && (
+            <Field>
+              <FieldLabel>Initial Password</FieldLabel>
+              <Input
+                type="password"
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                placeholder="Set a password for this user (optional)"
+                autoComplete="new-password"
+              />
+              <p className="mt-1 text-xs text-slate-500">Min 8 chars, must include uppercase, lowercase, digit and special char.</p>
+            </Field>
+          )}
         </div>
       </Modal>
     </div>

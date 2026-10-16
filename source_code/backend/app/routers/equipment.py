@@ -6,9 +6,10 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deps import get_current_user, require_role
-from app.constants import ROLE_ADMIN
-from app.models import AuditLog, Equipment, User
+from app.constants import ROLE_ADMIN, ASSET_STATUS_APPROVED
+from app.models import AuditLog, Equipment, User, AssetCreationRequest
 from app.schemas import EquipmentCreate, EquipmentOut, EquipmentUpdate, StatusToggle
+from app.audit import log_audit, diff_and_log
 
 router = APIRouter(prefix="/api/equipment", tags=["equipment"])
 
@@ -18,6 +19,7 @@ def list_equipment(
     active_only: bool = False,
     plant: Optional[str] = None,
     type: Optional[str] = None,
+    system_type: Optional[str] = None,
     validation_status: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
@@ -28,6 +30,8 @@ def list_equipment(
         q = q.filter(Equipment.plant == plant)
     if type:
         q = q.filter(Equipment.type == type)
+    if system_type:
+        q = q.filter(Equipment.system_type == system_type)
     if validation_status:
         q = q.filter(Equipment.validation_status == validation_status)
     return q.order_by(Equipment.equipment_code).all()
@@ -62,18 +66,6 @@ def validation_alerts(
                 "created_at": item.created_at.isoformat() if item.created_at else None,
             })
     return alerts
-
-
-def _log_audit(db: Session, user: User, action: str, description: str, request_code: Optional[str] = None) -> None:
-    log = AuditLog(
-        request_code=request_code,
-        user_employee_id=user.employee_id,
-        user_name=user.name,
-        action=action,
-        description=description,
-    )
-    db.add(log)
-    db.commit()
 
 
 def _next_equipment_code(db: Session) -> str:
@@ -111,6 +103,52 @@ def _apply_extended_fields(item: Equipment, payload: EquipmentCreate) -> None:
     item.backup_include = payload.backup_include
     item.computer_system_id = payload.computer_system_id
     item.remarks = payload.remarks
+    if hasattr(payload, "instrument_ids"):
+        item.instrument_ids = payload.instrument_ids
+
+
+def _equipment_dict(item: Equipment) -> dict:
+    """Snapshot key mutable fields for diff_and_log."""
+    return {
+        "name": item.name,
+        "type": item.type,
+        "location": item.location,
+        "plant": item.plant,
+        "allowed_roles": item.allowed_roles,
+        "system_id": item.system_id,
+        "system_type": item.system_type,
+        "make": item.make,
+        "model_name": item.model_name,
+        "application_name": item.application_name,
+        "gamp_category": item.gamp_category,
+        "usp_classification": item.usp_classification,
+        "validation_status": item.validation_status,
+        "periodic_review_frequency": item.periodic_review_frequency,
+        "backup_include": item.backup_include,
+        "computer_system_id": item.computer_system_id,
+        "remarks": item.remarks,
+    }
+
+
+FIELD_LABELS = {
+    "name": "Name",
+    "type": "Type",
+    "location": "Department",
+    "plant": "Plant",
+    "allowed_roles": "Allowed Roles",
+    "system_id": "System ID",
+    "system_type": "System Type",
+    "make": "Make",
+    "model_name": "Model",
+    "application_name": "Application Name",
+    "gamp_category": "GAMP Category",
+    "usp_classification": "USP Classification",
+    "validation_status": "Validation Status",
+    "periodic_review_frequency": "Periodic Review Frequency (months)",
+    "backup_include": "Include in Backup",
+    "computer_system_id": "Computer System ID",
+    "remarks": "Remarks",
+}
 
 
 @router.post("", response_model=EquipmentOut, status_code=status.HTTP_201_CREATED)
@@ -134,7 +172,12 @@ def create_equipment(
     db.add(item)
     db.commit()
     db.refresh(item)
-    _log_audit(db, current_user, "EQUIPMENT_CREATED", f"Created equipment {item.equipment_code}: {item.name}")
+    log_audit(
+        db, current_user, "EQUIPMENT_CREATED",
+        f"Created equipment {item.equipment_code}: {item.name}",
+        entity=item.equipment_code, field="Status", old=None, new="Active",
+        plant=item.plant,
+    )
     return item
 
 
@@ -158,6 +201,29 @@ def update_equipment(
     current_user: User = Depends(require_role(ROLE_ADMIN)),
 ):
     item = _get_or_404(db, code)
+
+    # Snapshot before-state for audit diff
+    old_snap = _equipment_dict(item)
+
+    # Reject validation_status='validated' unless an approved CREATE asset request exists
+    current_val_status = item.validation_status or ""
+    new_val_status = payload.validation_status or ""
+    if new_val_status == "validated" and current_val_status != "validated":
+        approved_create = (
+            db.query(AssetCreationRequest)
+            .filter(
+                AssetCreationRequest.equipment_code == code,
+                AssetCreationRequest.request_type == "CREATE",
+                AssetCreationRequest.status == ASSET_STATUS_APPROVED,
+            )
+            .first()
+        )
+        if not approved_create:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                "Equipment can only be set to 'Validated' after its Asset Creation request has been approved."
+            )
+
     item.name = payload.name
     item.type = payload.type
     item.location = payload.location
@@ -165,9 +231,19 @@ def update_equipment(
     item.allowed_roles = ",".join(payload.allowed_roles)
     item.validation_date = payload.validation_date
     _apply_extended_fields(item, payload)
+
+    # Build new snapshot and diff
+    new_snap = _equipment_dict(item)
     db.commit()
     db.refresh(item)
-    _log_audit(db, current_user, "EQUIPMENT_UPDATED", f"Updated equipment {item.equipment_code}: {item.name}")
+
+    diff_and_log(
+        db, current_user, "EQUIPMENT_UPDATED",
+        f"Equipment {item.equipment_code}",
+        old_snap, new_snap,
+        labels=FIELD_LABELS,
+        plant=item.plant,
+    )
     return item
 
 
@@ -179,11 +255,39 @@ def toggle_equipment_status(
     current_user: User = Depends(require_role(ROLE_ADMIN)),
 ):
     item = _get_or_404(db, code)
+    old_active = item.active
+
+    # If retiring (active=False), require an approved RETIRE asset request
+    if not payload.active and old_active:
+        approved_retire = (
+            db.query(AssetCreationRequest)
+            .filter(
+                AssetCreationRequest.equipment_code == code,
+                AssetCreationRequest.request_type == "RETIRE",
+                AssetCreationRequest.status == ASSET_STATUS_APPROVED,
+            )
+            .first()
+        )
+        if not approved_retire:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                "Equipment can only be retired after an Asset Retire request has been approved. "
+                "Please submit and approve an Asset Retire request first."
+            )
+
     item.active = payload.active
     db.commit()
     db.refresh(item)
-    status_text = "activated" if item.active else "deactivated"
-    _log_audit(db, current_user, "EQUIPMENT_STATUS_CHANGED", f"Equipment {item.equipment_code} {status_text} by {current_user.name}")
+
+    old_label = "Active" if old_active else "Retired"
+    new_label = "Active" if item.active else "Retired"
+    log_audit(
+        db, current_user, "EQUIPMENT_STATUS_CHANGED",
+        f"Equipment {item.equipment_code} status changed from {old_label} to {new_label}",
+        entity=item.equipment_code, field="Status",
+        old=old_label, new=new_label,
+        plant=item.plant,
+    )
     return item
 
 

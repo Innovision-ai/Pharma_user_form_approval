@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search, SlidersHorizontal, Plus, Eye, Pencil, Power } from "lucide-react";
+import { Search, SlidersHorizontal, Plus, Eye, Pencil, Power, ArrowRightCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import type { Equipment } from "../types";
@@ -12,13 +12,14 @@ import { Modal } from "../components/ui/Modal";
 import { Field, FieldLabel, Input, Select } from "../components/ui/Input";
 import { StatusBadge } from "../components/StatusBadge";
 import { useToast } from "../components/ui/Toast";
+import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 
-const ROLE_OPTIONS = ["Analyst", "Senior Analyst", "Scientist", "Operator", "Supervisor"];
+// GAMP Cat 2 removed per client feedback — only 1, 3, 4, 5
+const GAMP_OPTIONS = ["1", "3", "4", "5"];
 const PLANT_OPTIONS = ["P1", "P2", "P3"];
 const TYPE_OPTIONS = ["Hardware", "Software", "Instrument", "Equipment"];
 const SYSTEM_TYPE_OPTIONS = ["HMI", "SCADA", "Software", "DCS", "Data Logger", "Other"];
-const GAMP_OPTIONS = ["1", "2", "3", "4", "5"];
-const VALIDATION_STATUS_OPTIONS = ["validated", "under_validation"];
+const VALIDATION_STATUS_OPTIONS = ["under_validation", "validated"];
 
 interface FormState {
   name: string;
@@ -52,6 +53,47 @@ const emptyForm: FormState = {
   periodic_review_frequency: "", backup_include: false, computer_system_id: "", remarks: "",
 };
 
+// Tag-input state for allowed roles
+function RoleTagInput({
+  value,
+  onChange,
+}: {
+  value: string[];
+  onChange: (roles: string[]) => void;
+}) {
+  const [input, setInput] = useState("");
+
+  const add = () => {
+    const v = input.trim();
+    if (v && !value.includes(v)) onChange([...value, v]);
+    setInput("");
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-1.5">
+        {value.map((r) => (
+          <span key={r} className="flex items-center gap-1 rounded-full border border-brand-300 bg-brand-50 px-2.5 py-0.5 text-xs font-medium text-brand-800">
+            {r}
+            <button type="button" onClick={() => onChange(value.filter((x) => x !== r))} className="ml-0.5 text-brand-400 hover:text-brand-700">×</button>
+          </span>
+        ))}
+        {value.length === 0 && <span className="text-xs text-slate-400 italic">No roles added yet.</span>}
+      </div>
+      <div className="flex gap-2">
+        <Input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }}
+          placeholder="Type role name and press Enter"
+          className="flex-1"
+        />
+        <Button type="button" variant="secondary" size="sm" onClick={add}>Add</Button>
+      </div>
+    </div>
+  );
+}
+
 export function EquipmentMasterPage() {
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -62,13 +104,18 @@ export function EquipmentMasterPage() {
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "retired">("all");
   const [validationFilter, setValidationFilter] = useState("");
+
+  // Confirm dialog for status toggle
+  const [confirmTarget, setConfirmTarget] = useState<Equipment | null>(null);
 
   const filteredItems = useMemo(() => items.filter((equipment) => {
     const haystack = `${equipment.equipment_code} ${equipment.name} ${equipment.type} ${equipment.location} ${equipment.plant} ${equipment.make ?? ""} ${equipment.system_type ?? ""}`.toLowerCase();
     const matchesQuery = haystack.includes(query.toLowerCase());
-    const matchesStatus = statusFilter === "all" || (statusFilter === "active" ? equipment.active : !equipment.active);
+    const matchesStatus =
+      statusFilter === "all" ||
+      (statusFilter === "active" ? equipment.active : !equipment.active);
     const matchesValidation = !validationFilter || equipment.validation_status === validationFilter;
     return matchesQuery && matchesStatus && matchesValidation;
   }), [items, query, statusFilter, validationFilter]);
@@ -112,17 +159,9 @@ export function EquipmentMasterPage() {
     setModalOpen(true);
   };
 
-  const toggleRole = (role: string) =>
-    setForm((f) => ({
-      ...f,
-      allowed_roles: f.allowed_roles.includes(role)
-        ? f.allowed_roles.filter((r) => r !== role)
-        : [...f.allowed_roles, role],
-    }));
-
   const handleSave = async () => {
     if (!form.name || !form.location || !form.type || !form.plant || !form.validation_date || form.allowed_roles.length === 0) {
-      showToast("Please fill in all required fields and select at least one role.", "error");
+      showToast("Please fill in all required fields and add at least one role.", "error");
       return;
     }
     setSaving(true);
@@ -148,30 +187,47 @@ export function EquipmentMasterPage() {
   };
 
   const handleToggleStatus = async (eq: Equipment) => {
+    // Open confirm dialog
+    setConfirmTarget(eq);
+  };
+
+  const doToggleStatus = async () => {
+    if (!confirmTarget) return;
+    const eq = confirmTarget;
+    setConfirmTarget(null);
     try {
       await api.toggleEquipmentStatus(eq.equipment_code, !eq.active);
-      showToast(`${eq.equipment_code} marked ${!eq.active ? "active" : "inactive"}.`);
+      showToast(`${eq.equipment_code} marked ${!eq.active ? "Active" : "Retired"}.`);
       load();
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Update failed", "error");
     }
   };
 
+  const handleRaiseRetire = (eq: Equipment) => {
+    navigate(`/asset-requests/new?retire=${eq.equipment_code}`);
+  };
+
   return (
     <div className="space-y-8">
-      <PageHeader eyebrow="Administration" title="Equipment Master" description="Register validated assets and define the roles that can request access." actions={<Button onClick={openCreate}><Plus size={16} /> Add equipment</Button>} />
+      <PageHeader
+        eyebrow="Administration"
+        title="Equipment Master"
+        description="Register validated assets and define the roles that can request access."
+        actions={<Button onClick={openCreate}><Plus size={16} /> Add equipment</Button>}
+      />
 
       <div className="surface flex flex-col gap-3 p-4 sm:flex-row sm:items-center flex-wrap">
         <div className="relative flex-1 min-w-[200px]">
           <Search size={16} className="absolute left-3 top-3 text-slate-400" />
-          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search equipment, location, plant..." className="pl-9" />
+          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search equipment, department, plant..." className="pl-9" />
         </div>
         <div className="flex items-center gap-2">
           <SlidersHorizontal size={16} className="text-slate-400" />
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 outline-none focus:border-brand-500">
             <option value="all">All statuses</option>
             <option value="active">Active only</option>
-            <option value="inactive">Inactive only</option>
+            <option value="retired">Retired only</option>
           </select>
         </div>
         <select value={validationFilter} onChange={(e) => setValidationFilter(e.target.value)} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 outline-none focus:border-brand-500">
@@ -199,20 +255,26 @@ export function EquipmentMasterPage() {
               { header: "Validation", render: (e) => <StatusBadge status={e.validation_status ?? "under_validation"} /> },
               { header: "Review (mo)", render: (e) => e.periodic_review_frequency ?? <span className="text-slate-400">—</span> },
               { header: "Backup", render: (e) => e.backup_include ? <Badge tone="green">Yes</Badge> : <Badge>No</Badge> },
-              { header: "Status", render: (e) => <Badge tone={e.active ? "green" : "red"}>{e.active ? "Active" : "Inactive"}</Badge> },
+              { header: "Status", render: (e) => <Badge tone={e.active ? "green" : "red"}>{e.active ? "Active" : "Retired"}</Badge> },
               {
                 header: "",
                 render: (e) => (
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
                     <Button variant="secondary" size="sm" title="View details" onClick={() => navigate(`/equipment/${e.equipment_code}`)}>
                       <Eye size={14} /> <span className="hidden xl:inline">View</span>
                     </Button>
                     <Button variant="secondary" size="sm" title="Edit" onClick={() => openEdit(e)}>
                       <Pencil size={14} /> <span className="hidden xl:inline">Edit</span>
                     </Button>
-                    <Button variant={e.active ? "danger" : "secondary"} size="sm" title={e.active ? "Deactivate" : "Activate"} onClick={() => handleToggleStatus(e)}>
-                      <Power size={14} /> <span className="hidden xl:inline">{e.active ? "Deactivate" : "Activate"}</span>
-                    </Button>
+                    {e.active ? (
+                      <Button variant="danger" size="sm" title="Raise retire request" onClick={() => handleRaiseRetire(e)}>
+                        <ArrowRightCircle size={14} /> <span className="hidden xl:inline">Retire</span>
+                      </Button>
+                    ) : (
+                      <Button variant="secondary" size="sm" title="Activate equipment" onClick={() => handleToggleStatus(e)}>
+                        <Power size={14} /> <span className="hidden xl:inline">Activate</span>
+                      </Button>
+                    )}
                   </div>
                 ),
               },
@@ -220,6 +282,18 @@ export function EquipmentMasterPage() {
           />
         )}
       </Card>
+
+      {/* Confirm activate dialog */}
+      {confirmTarget && !confirmTarget.active && (
+        <ConfirmDialog
+          open={true}
+          title="Activate equipment?"
+          message={`Do you want to activate equipment ${confirmTarget.equipment_code}?`}
+          confirmLabel="Yes, activate"
+          onConfirm={doToggleStatus}
+          onCancel={() => setConfirmTarget(null)}
+        />
+      )}
 
       <Modal
         open={modalOpen}
@@ -250,18 +324,11 @@ export function EquipmentMasterPage() {
               </Select>
             </Field>
           </div>
-          <Field><FieldLabel>Location *</FieldLabel><Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} /></Field>
+          <Field><FieldLabel>Department *</FieldLabel><Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="e.g. QC, Production" /></Field>
           <Field><FieldLabel>Validation Date *</FieldLabel><Input type="date" value={form.validation_date} onChange={(e) => setForm({ ...form, validation_date: e.target.value })} /></Field>
           <Field>
             <FieldLabel>Allowed Roles</FieldLabel>
-            <div className="flex flex-wrap gap-2">
-              {ROLE_OPTIONS.map((role) => (
-                <button key={role} type="button" onClick={() => toggleRole(role)}
-                  className={`rounded-full border px-3 py-1 text-xs font-medium ${form.allowed_roles.includes(role) ? "border-brand-600 bg-brand-600 text-white" : "border-slate-300 text-slate-600"}`}>
-                  {role}
-                </button>
-              ))}
-            </div>
+            <RoleTagInput value={form.allowed_roles} onChange={(roles) => setForm({ ...form, allowed_roles: roles })} />
           </Field>
 
           <p className="pt-2 text-xs font-extrabold uppercase tracking-widest text-slate-400">Computerized system details</p>
@@ -275,10 +342,13 @@ export function EquipmentMasterPage() {
             </Field>
           </div>
           <div className="grid grid-cols-2 gap-3">
+            <Field><FieldLabel>Computer System ID</FieldLabel><Input value={form.computer_system_id} onChange={(e) => setForm({ ...form, computer_system_id: e.target.value })} /></Field>
             <Field><FieldLabel>Make</FieldLabel><Input value={form.make} onChange={(e) => setForm({ ...form, make: e.target.value })} placeholder="e.g. Siemens" /></Field>
-            <Field><FieldLabel>Model</FieldLabel><Input value={form.model_name} onChange={(e) => setForm({ ...form, model_name: e.target.value })} /></Field>
           </div>
-          <Field><FieldLabel>Application Name</FieldLabel><Input value={form.application_name} onChange={(e) => setForm({ ...form, application_name: e.target.value })} /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field><FieldLabel>Model</FieldLabel><Input value={form.model_name} onChange={(e) => setForm({ ...form, model_name: e.target.value })} /></Field>
+            <Field><FieldLabel>Application Name</FieldLabel><Input value={form.application_name} onChange={(e) => setForm({ ...form, application_name: e.target.value })} /></Field>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <Field>
               <FieldLabel>GAMP Category</FieldLabel>
@@ -292,7 +362,7 @@ export function EquipmentMasterPage() {
             <Field>
               <FieldLabel>Validation Status</FieldLabel>
               <Select value={form.validation_status} onChange={(e) => setForm({ ...form, validation_status: e.target.value })}>
-                {VALIDATION_STATUS_OPTIONS.map((v) => <option key={v} value={v}>{v}</option>)}
+                {VALIDATION_STATUS_OPTIONS.map((v) => <option key={v} value={v}>{v === "validated" ? "Validated" : "Under Validation"}</option>)}
               </Select>
             </Field>
             <Field><FieldLabel>Periodic Review (months)</FieldLabel><Input type="number" value={form.periodic_review_frequency} onChange={(e) => setForm({ ...form, periodic_review_frequency: e.target.value })} placeholder="e.g. 12" /></Field>
@@ -301,16 +371,13 @@ export function EquipmentMasterPage() {
             <Field><FieldLabel>Initial Validation Date</FieldLabel><Input type="date" value={form.initial_validation_date} onChange={(e) => setForm({ ...form, initial_validation_date: e.target.value })} /></Field>
             <Field><FieldLabel>Latest Validation Date</FieldLabel><Input type="date" value={form.latest_validation_date} onChange={(e) => setForm({ ...form, latest_validation_date: e.target.value })} /></Field>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Field><FieldLabel>Computer System ID</FieldLabel><Input value={form.computer_system_id} onChange={(e) => setForm({ ...form, computer_system_id: e.target.value })} /></Field>
-            <Field>
-              <FieldLabel>Include in Backup</FieldLabel>
-              <label className="flex items-center gap-2 pt-2">
-                <input type="checkbox" checked={form.backup_include} onChange={(e) => setForm({ ...form, backup_include: e.target.checked })} className="h-4 w-4 rounded" />
-                <span className="text-sm text-slate-700">Yes, include in backup schedule</span>
-              </label>
-            </Field>
-          </div>
+          <Field>
+            <FieldLabel>Include in Backup</FieldLabel>
+            <label className="flex items-center gap-2 pt-2">
+              <input type="checkbox" checked={form.backup_include} onChange={(e) => setForm({ ...form, backup_include: e.target.checked })} className="h-4 w-4 rounded" />
+              <span className="text-sm text-slate-700">Yes, include in backup schedule</span>
+            </label>
+          </Field>
           <Field><FieldLabel>Remarks</FieldLabel><Input value={form.remarks} onChange={(e) => setForm({ ...form, remarks: e.target.value })} /></Field>
         </div>
       </Modal>

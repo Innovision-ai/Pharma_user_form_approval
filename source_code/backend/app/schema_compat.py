@@ -48,6 +48,12 @@ COLUMN_ADDITIONS: dict[str, list[tuple[str, str]]] = {
         ("request_type", "request_type VARCHAR(10) DEFAULT 'CREATE'"),
         ("equipment_code", "equipment_code VARCHAR(20)"),
     ],
+    "backup_schedule_entries": [
+        ("backup_path", "backup_path TEXT"),
+    ],
+    "uam_requests": [
+        ("auth_reason", "auth_reason TEXT"),
+    ],
 }
 
 
