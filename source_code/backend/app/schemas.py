@@ -18,6 +18,11 @@ class UserOut(BaseModel):
     role: str
     active: bool
     action_pin: str
+    locked: bool = False
+    auth_source: Optional[str] = None
+    # Populated by /api/users/me only
+    selected_plant: Optional[str] = None
+    password_expired: bool = False
 
     @field_validator("plants", mode="before")
     @classmethod
@@ -36,8 +41,10 @@ class UserCreate(BaseModel):
     department: str = Field(min_length=1, max_length=80)
     plant: str = Field(default="P1", max_length=20)
     plants: list[str] = Field(default_factory=list)
-    role: str = Field(pattern="^(EMPLOYEE|HOD|QA|ADMIN|IT)$")
+    role: str = Field(pattern="^(EMPLOYEE|HOD|QA|ADMIN|IT|INVENTORY_REQUESTOR)$")
     active: bool = True
+    password: Optional[str] = Field(default=None, max_length=100)
+    auth_source: Optional[str] = Field(default="LOCAL", max_length=20)
 
 
 class UserUpdate(BaseModel):
@@ -46,7 +53,7 @@ class UserUpdate(BaseModel):
     department: str = Field(min_length=1, max_length=80)
     plant: str = Field(max_length=20)
     plants: list[str] = Field(default_factory=list)
-    role: str = Field(pattern="^(EMPLOYEE|HOD|QA|ADMIN|IT)$")
+    role: str = Field(pattern="^(EMPLOYEE|HOD|QA|ADMIN|IT|INVENTORY_REQUESTOR)$")
 
 
 # ---------- Equipment ----------
@@ -73,6 +80,7 @@ class EquipmentCreate(BaseModel):
     backup_include: bool = False
     computer_system_id: Optional[str] = None
     remarks: Optional[str] = None
+    instrument_ids: Optional[str] = None
 
     @field_validator("allowed_roles")
     @classmethod
@@ -115,6 +123,7 @@ class EquipmentOut(BaseModel):
     backup_include: bool = False
     computer_system_id: Optional[str] = None
     remarks: Optional[str] = None
+    instrument_ids: Optional[str] = None
 
     @field_validator("allowed_roles", mode="before")
     @classmethod
@@ -233,6 +242,11 @@ class AuditLogOut(BaseModel):
     action: str
     description: str
     timestamp: datetime
+    entity: Optional[str] = None
+    field_name: Optional[str] = None
+    old_value: Optional[str] = None
+    new_value: Optional[str] = None
+    plant: Optional[str] = None
 
 
 # ---------- Notifications ----------

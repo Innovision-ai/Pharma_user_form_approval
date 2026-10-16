@@ -1,4 +1,4 @@
-export type Role = "EMPLOYEE" | "HOD" | "QA" | "ADMIN" | "IT";
+﻿export type Role = "EMPLOYEE" | "HOD" | "QA" | "ADMIN" | "IT" | "INVENTORY_REQUESTOR";
 
 export type ApproverType = "HOD" | "QA";
 
@@ -20,6 +20,10 @@ export interface User {
   role: Role;
   active: boolean;
   action_pin: string;
+  locked?: boolean;
+  auth_source?: string | null;
+  selected_plant?: string | null;
+  password_expired?: boolean;
 }
 
 export interface Equipment {
@@ -48,6 +52,7 @@ export interface Equipment {
   backup_include?: boolean;
   computer_system_id?: string | null;
   remarks?: string | null;
+  instrument_ids?: string | null;
 }
 
 export interface Approver {
@@ -105,6 +110,11 @@ export interface AuditLog {
   action: string;
   description: string;
   timestamp: string;
+  entity?: string | null;
+  field_name?: string | null;
+  old_value?: string | null;
+  new_value?: string | null;
+  plant?: string | null;
 }
 
 export interface Notification {

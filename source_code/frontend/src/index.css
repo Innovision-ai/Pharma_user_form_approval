@@ -67,3 +67,37 @@ textarea {
     transition-duration: 0.01ms !important;
   }
 }
+/* ---------- Print / PDF reports ---------- */
+.print-only { display: none; }
+
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 18mm 10mm 16mm 10mm;
+    @bottom-right { content: "Page " counter(page) " of " counter(pages); font-size: 9pt; color: #475569; }
+  }
+  html, body, #root { height: auto !important; overflow: visible !important; background: #fff !important; }
+  .no-print, aside, header.sticky, nav { display: none !important; }
+  main, .overflow-y-auto, .overflow-hidden, .h-screen { height: auto !important; overflow: visible !important; }
+  .print-only { display: block; }
+  .print-header {
+    position: fixed; top: -15mm; left: 0; right: 0; height: 14mm;
+    display: flex !important; align-items: center; justify-content: space-between; gap: 12px;
+    border-bottom: 1.5px solid #334155; padding-bottom: 2mm;
+  }
+  .print-logo { height: 11mm; width: auto; }
+  .print-title { text-align: center; flex: 1; }
+  .print-title-name { font-size: 14pt; font-weight: 700; color: #0f172a; margin: 0; }
+  .print-title-sub { font-size: 9pt; color: #475569; margin: 0; }
+  .print-footer {
+    position: fixed; bottom: -13mm; left: 0; right: 0;
+    display: flex !important; justify-content: space-between; gap: 12px;
+    border-top: 1px solid #94a3b8; padding-top: 2mm; font-size: 8.5pt; color: #334155;
+  }
+  .print-page-number { min-width: 24mm; }
+  table { width: 100%; border-collapse: collapse; font-size: 8.5pt; }
+  th, td { border: 1px solid #cbd5e1; padding: 3px 5px; }
+  thead { display: table-header-group; }
+  tr { page-break-inside: avoid; }
+  .surface, .glass-panel { box-shadow: none !important; border: none !important; background: #fff !important; backdrop-filter: none !important; }
+}

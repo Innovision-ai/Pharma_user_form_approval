@@ -9,7 +9,28 @@ ROLE_HOD = "HOD"
 ROLE_QA = "QA"
 ROLE_ADMIN = "ADMIN"
 ROLE_IT = "IT"
-USER_ROLES = [ROLE_EMPLOYEE, ROLE_HOD, ROLE_QA, ROLE_ADMIN, ROLE_IT]
+ROLE_INVENTORY_REQUESTOR = "INVENTORY_REQUESTOR"
+USER_ROLES = [ROLE_EMPLOYEE, ROLE_HOD, ROLE_QA, ROLE_ADMIN, ROLE_IT, ROLE_INVENTORY_REQUESTOR]
+
+# Display names only - DB role codes above never change.
+ROLE_LABELS = {
+    ROLE_EMPLOYEE: "Initiator",
+    ROLE_HOD: "Reviewer",
+    ROLE_QA: "QA Approver",
+    ROLE_ADMIN: "IT Executor",
+    ROLE_IT: "IT Support",
+    ROLE_INVENTORY_REQUESTOR: "Inventory Requestor",
+}
+
+# Equipment lifecycle labels used everywhere in the UI/reports: Active / Retired
+# (stored as Equipment.active True/False).
+
+# Department lists per plant. PLACEHOLDER values - replace with the client's list.
+DEPARTMENTS_BY_PLANT = {
+    "P1": ["Production", "QC", "Quality", "R&D", "IT", "Engineering", "Warehouse"],
+    "P2": ["Production", "QC", "Quality", "Engineering", "IT", "Warehouse"],
+    "P3": ["Production", "QC", "Quality", "IT", "Warehouse"],
+}
 
 APPROVER_TYPE_HOD = "HOD"
 APPROVER_TYPE_QA = "QA"
@@ -78,5 +99,5 @@ ASSET_CREATION_STATUSES = [
 ]
 
 EQUIPMENT_SYSTEM_TYPES = ["HMI", "SCADA", "Software", "DCS", "Data Logger", "Other"]
-GAMP_CATEGORIES = ["1", "2", "3", "4", "5"]
+GAMP_CATEGORIES = ["1", "3", "4", "5"]
 VALIDATION_STATUSES = ["validated", "under_validation"]

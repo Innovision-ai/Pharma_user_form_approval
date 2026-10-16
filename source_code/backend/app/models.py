@@ -21,6 +21,12 @@ class User(Base):
     hashed_password: Mapped[str] = mapped_column(String(255), default="")
     action_pin: Mapped[str] = mapped_column(String(20), default="0000")
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Password policy fields (additive)
+    failed_attempts: Mapped[int] = mapped_column(Integer, default=0)
+    locked: Mapped[bool] = mapped_column(Boolean, default=False)
+    password_changed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    password_history: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON list of previous hashes
+    auth_source: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # LOCAL | DIRECTORY
 
     def plants_list(self) -> list[str]:
         base = [p.strip() for p in (self.plants or "").split(",") if p.strip()]
@@ -59,6 +65,7 @@ class Equipment(Base):
     backup_include: Mapped[bool] = mapped_column(Boolean, default=False)
     computer_system_id: Mapped[Optional[str]] = mapped_column(String(60), nullable=True)
     remarks: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    instrument_ids: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Instrument / Equipment / Connected Instrument IDs
 
     def roles_list(self) -> list[str]:
         return [r.strip() for r in self.allowed_roles.split(",") if r.strip()]
@@ -155,6 +162,12 @@ class AuditLog(Base):
     action: Mapped[str] = mapped_column(String(60))
     description: Mapped[str] = mapped_column(Text)
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    # Change tracking (additive): which record/field changed, old and new value
+    entity: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    field_name: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    old_value: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    new_value: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    plant: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
 
 
 class Notification(Base):
@@ -206,6 +219,9 @@ class AssetCreationRequest(Base):
     qa_approver_id: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
 
     plant: Mapped[str] = mapped_column(String(20), default="P1")
+    # CREATE (default) or RETIRE; linked to Equipment.equipment_code for cross validation
+    request_type: Mapped[Optional[str]] = mapped_column(String(10), nullable=True, default="CREATE")
+    equipment_code: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, index=True)
     status: Mapped[str] = mapped_column(String(30), index=True)
     rejection_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     form_data: Mapped[str] = mapped_column(Text, default="{}")

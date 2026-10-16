@@ -45,3 +45,32 @@ def require_role(*roles: str):
         return user
 
     return _check
+
+
+def get_current_plant(
+    token: str = Depends(oauth2_scheme),
+) -> Optional[str]:
+    """Plant selected at login (stored in the JWT). None = no plant scoping (legacy tokens)."""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError:
+        return None
+    return payload.get("plant") or None
+
+
+def verify_current_password(user: User, password: Optional[str]) -> None:
+    """Re-authentication ("e-signature") check: raises 401 unless `password` is the
+    logged-in user's account password (or their action PIN for legacy accounts)."""
+    from app.auth import verify_password
+
+    if not password:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Password is required to perform this action")
+    ok = False
+    try:
+        ok = bool(user.hashed_password) and verify_password(password, user.hashed_password)
+    except Exception:  # noqa: BLE001
+        ok = False
+    if not ok and user.action_pin and password == user.action_pin:
+        ok = True
+    if not ok:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Incorrect password")

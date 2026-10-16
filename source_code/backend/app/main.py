@@ -7,7 +7,7 @@ from app.database import Base, SessionLocal, engine
 from app.models import Equipment
 from app.schema_compat import ensure_compatible_schema
 from app.routers import admin, approvers, audit, dashboard, equipment, notifications, requests, users, auth, uam_requests
-from app.routers import asset_requests, periodic_review, backup_schedule, preventive_maintenance, password_vault
+from app.routers import asset_requests, periodic_review, backup_schedule, preventive_maintenance, password_vault, meta
 from app import seed
 
 app = FastAPI(
@@ -60,6 +60,7 @@ app.include_router(periodic_review.router)
 app.include_router(backup_schedule.router)
 app.include_router(preventive_maintenance.router)
 app.include_router(password_vault.router)
+app.include_router(meta.router)
 
 
 @app.on_event("startup")

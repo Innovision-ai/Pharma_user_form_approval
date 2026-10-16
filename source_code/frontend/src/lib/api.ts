@@ -68,18 +68,33 @@ async function request<T>(
 
 export const api = {
   // Auth
-  login: async (username: string, password: string) => {
+  login: async (username: string, password: string, plant?: string) => {
     const formData = new URLSearchParams();
     formData.append("username", username);
     formData.append("password", password);
+    if (plant) formData.append("plant", plant);
     const res = await fetch(`${BASE_URL}/api/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: formData.toString(),
     });
-    if (!res.ok) throw new ApiError(res.status, "Login failed");
+    if (!res.ok) {
+      let message = "Login failed";
+      try { const body = await res.json(); if (typeof body.detail === "string") message = body.detail; } catch { /* no body */ }
+      throw new ApiError(res.status, message);
+    }
     return res.json() as Promise<{ access_token: string; token_type: string }>;
   },
+  getLoginPlants: (employee_id: string) =>
+    request<{ plants: string[] }>(`/api/auth/plants?employee_id=${encodeURIComponent(employee_id)}`),
+  verifyCredentials: (password: string) =>
+    request<{ ok: boolean; user_id: string; name: string }>("/api/auth/verify", { method: "POST", body: JSON.stringify({ password }) }),
+  changePassword: (current_password: string, new_password: string) =>
+    request<{ ok: boolean }>("/api/auth/change-password", { method: "POST", body: JSON.stringify({ current_password, new_password }) }),
+  getPasswordPolicy: () =>
+    request<{ min_length: number; expiry_days: number; history_count: number; max_failed_attempts: number; idle_timeout_minutes: number; text: string }>("/api/auth/password-policy"),
+  getDepartments: (plant?: string) =>
+    request<{ plants: Record<string, string[]>; departments: string[] }>(`/api/meta/departments${plant ? `?plant=${encodeURIComponent(plant)}` : ""}`),
 
   // Users
   listUsers: (params?: { role?: string; plant?: string; active?: boolean }) => {
