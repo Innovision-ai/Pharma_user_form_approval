@@ -4,7 +4,7 @@ import { api } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import type { PeriodicReviewRow } from "../types";
 import { Card } from "../components/ui/Card";
-import { DataTable } from "../components/ui/DataTable";
+import { DataTable, type Column } from "../components/ui/DataTable";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Modal } from "../components/ui/Modal";
@@ -146,7 +146,7 @@ export function PeriodicReviewPage() {
             rows={filtered}
             rowKey={(r) => r.equipment_code}
             emptyMessage="No validated systems with periodic review configured."
-            columns={[
+            columns={([
               { header: "Code", render: (r) => <span className="font-mono text-xs">{r.equipment_code}</span> },
               { header: "System Name", render: (r) => <span className="font-semibold">{r.equipment_name}</span> },
               { header: "Type", render: (r) => { const row = r as Record<string, unknown>; return row.type ? <Badge>{String(row.type)}</Badge> : <span className="text-slate-400">—</span>; } },
@@ -163,7 +163,7 @@ export function PeriodicReviewPage() {
                   </Button>
                 ),
               } : null,
-            ].filter(Boolean) as Parameters<typeof DataTable>[0]["columns"]}
+            ] as (Column<PeriodicReviewRow> | null)[]).filter(Boolean) as Column<PeriodicReviewRow>[]}
           />
         )}
       </Card>
@@ -182,8 +182,8 @@ export function PeriodicReviewPage() {
             open={credOpen}
             title="E-Signature: Confirm Review"
             requireReason={false}
-            onConfirm={(userId, password, reason) => doUpdate(password, reason ?? "")}
-            onCancel={() => { setCredOpen(false); setUpdateTarget(null); }}
+            onConfirm={({ password, reason }) => doUpdate(password, reason)}
+            onClose={() => { setCredOpen(false); setUpdateTarget(null); }}
           />
         </>
       )}

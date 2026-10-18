@@ -1,4 +1,4 @@
-﻿export type Role = "EMPLOYEE" | "HOD" | "QA" | "ADMIN" | "IT" | "INVENTORY_REQUESTOR";
+export type Role = "EMPLOYEE" | "HOD" | "QA" | "ADMIN" | "IT" | "INVENTORY_REQUESTOR";
 
 export type ApproverType = "HOD" | "QA";
 
@@ -219,6 +219,7 @@ export interface AssetCreationRequest {
 
 // Operational schedule modules
 export interface PeriodicReviewRow {
+  [key: string]: unknown;
   equipment_code: string;
   equipment_name: string;
   system_type?: string | null;
@@ -234,6 +235,7 @@ export interface PeriodicReviewRow {
 }
 
 export interface BackupScheduleRow {
+  [key: string]: unknown;
   equipment_code: string;
   equipment_name: string;
   system_type?: string | null;
