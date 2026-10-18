@@ -74,9 +74,30 @@ def esign(page: Page, reason="UI test e-signature"):
     dlg.locator("button").filter(has_text=re.compile(r"Confirm|Sign|Submit|Approve|Save|Verify|Reject|Send|Complete|Resubmit|Execute", re.I)).last.click()
 
 
-def toast_text(page: Page) -> str:
-    page.wait_for_timeout(1200)
-    return page.locator("body").inner_text()
+def toast_text(page: Page, expect_re: str = r".", timeout_s: float = 25) -> str:
+    """Body text once `expect_re` appears (the live API can take a few seconds)."""
+    end = time.time() + timeout_s
+    text = ""
+    while time.time() < end:
+        page.wait_for_timeout(500)
+        text = page.locator("body").inner_text()
+        if re.search(expect_re, text):
+            break
+    return text
+
+
+def wait_row(page: Page, contains: str, pattern: str, timeout_s: float = 25) -> str:
+    """Text of the table row containing `contains` once it matches `pattern`."""
+    end = time.time() + timeout_s
+    text = ""
+    while time.time() < end:
+        rows = page.locator("main table tbody tr", has_text=contains)
+        if rows.count():
+            text = rows.first.inner_text()
+            if re.search(pattern, text):
+                break
+        page.wait_for_timeout(500)
+    return text
 
 
 @section("login")
@@ -84,32 +105,32 @@ def t_login(page: Page):
     page.goto(f"{BASE}/login")
     page.get_by_placeholder("Enter your username").wait_for(timeout=60000)
     body = page.locator("body").inner_text()
-    check(2, "login shows Username (not Employee ID)", "Username" in body and "Employee ID" not in body)
-    check(3, "login footer 'Powered by Air Care Zone' + copyright", "Powered by" in body and "Air Care Zone" in body and "©" in body)
+    check(3, "login shows Username (not Employee ID)", "Username" in body and "Employee ID" not in body)
+    check(4, "login footer 'Powered by Air Care Zone' + copyright", "Powered by" in body and "Air Care Zone" in body and "©" in body)
     bg = page.evaluate("getComputedStyle(document.querySelector('#root > div')).backgroundImage")
-    check(1, "login background image", "login-bg.svg" in bg, bg)
+    check(2, "login background image", "login-bg.svg" in bg, bg)
     page.get_by_placeholder("Enter your username").fill("EMP001")
     page.wait_for_timeout(1500)
     opts = page.locator("select").first.locator("option").all_inner_texts()
     check(24, "plant dropdown lists the user's plants", "P1" in opts and "P2" in opts, opts)
     shot(page, "01-login")
-    # refused for a plant the user does not belong to (HOD002 is P2 only)
-    page.get_by_placeholder("Enter your username").fill("HOD002")
+    # a single-plant user only gets their own plant (HOD001 is P1 only)
+    page.get_by_placeholder("Enter your username").fill("HOD001")
     page.wait_for_timeout(1500)
     opts = page.locator("select").first.locator("option").all_inner_texts()
-    check(24, "plant list restricted to the user's plants", opts == ["P2"], opts)
+    check(24, "plant list restricted to the user's plants", opts == ["P1"], opts)
 
 
 @section("shell")
 def t_shell(page: Page):
     login(page, "ADM001", "P1")
     body = page.locator("body").inner_text()
-    check(7, "no Reset Demo Data button", "Reset Demo Data" not in body)
+    check(8, "no Reset Demo Data button", "Reset Demo Data" not in body)
     nav = [t.strip() for t in page.locator("aside nav a").all_inner_texts() if t.strip()]
     expected = ["Dashboard", "Equipment Master", "Asset Requests", "Inventory Report", "Requests",
                 "Periodic Review Management", "Preventive Maintenance Management", "Backup Schedule Management",
                 "Password Vault", "User Management", "Audit Trail", "Notifications"]
-    check(8, "left menu order as specified", nav == expected, nav)
+    check(9, "left menu order as specified", nav == expected, nav)
     check(26, "Approver Master removed from menu", "Approver Master" not in nav)
     check(24, "selected plant shown in header", "Plant P1" in body)
     # search (row 4)
@@ -117,19 +138,19 @@ def t_shell(page: Page):
     page.get_by_placeholder("Search pages, equipment, request numbers...").fill("Backup")
     page.wait_for_timeout(500)
     hit = page.locator("button", has_text="Backup Schedule Management").last
-    check(4, "header search finds pages", hit.count() > 0)
+    check(5, "header search finds pages", hit.count() > 0)
     hit.click()
     page.wait_for_url(re.compile(r".*/backup-schedule"))
-    check(4, "search result navigates", "/backup-schedule" in page.url, page.url)
+    check(5, "search result navigates", "/backup-schedule" in page.url, page.url)
     # user menu (row 5) + about (row 6)
     page.locator("header button[aria-haspopup='menu']").click()
     menu = page.locator("[role='menu']").inner_text()
-    check(5, "down arrow opens user menu", "About" in menu and "Sign out" in menu and "Change password" in menu, menu)
+    check(6, "down arrow opens user menu", "About" in menu and "Sign out" in menu and "Change password" in menu, menu)
     shot(page, "02-user-menu")
     page.get_by_role("menuitem", name="About").click()
     page.wait_for_url(re.compile(r".*/about"))
     about = page.locator("main").inner_text()
-    check(6, "About page", "VERSION" in about.upper() and "Air Care Zone" in about, about[:120])
+    check(7, "About page", "VERSION" in about.upper() and "Air Care Zone" in about, about[:120])
     shot(page, "03-about")
 
 
@@ -138,23 +159,23 @@ def t_equipment(page: Page):
     page.goto(f"{BASE}/equipment")
     page.wait_for_load_state("networkidle")
     body = page.locator("main").inner_text()
-    check(9, "subtitle without 'validated'", "Register assets and define the roles" in body and "validated assets" not in body)
+    check(10, "subtitle without 'validated'", "Register assets and define the roles" in body and "validated assets" not in body)
     heads = page.locator("main table thead th").all_inner_texts()
     heads = [h.strip() for h in heads]
-    check(13, "'Validation Status' column", "VALIDATION STATUS" in [h.upper() for h in heads], heads)
-    check(14, "'Periodic Review Freq.' column", any("PERIODIC REVIEW FREQ" in h.upper() for h in heads), heads)
-    check(23, "plant filter", page.locator("select[aria-label='Plant filter']").count() == 1)
-    check(12, "system type filter", page.locator("select[aria-label='System type filter']").count() == 1)
+    check(14, "'Validation Status' column", "VALIDATION STATUS" in [h.upper() for h in heads], heads)
+    check(15, "'Periodic Review Freq.' column", any("PERIODIC REVIEW FREQ" in h.upper() for h in heads), heads)
+    check(24, "plant filter", page.locator("select[aria-label='Plant filter']").count() == 1)
+    check(13, "system type filter", page.locator("select[aria-label='System type filter']").count() == 1)
     page.locator("select[aria-label='System type filter']").select_option("Software")
     page.wait_for_timeout(300)
     types = page.locator("main table tbody tr").count()
-    check(12, "system type filter applies", types >= 1)
+    check(13, "system type filter applies", types >= 1)
     page.locator("select[aria-label='System type filter']").select_option("")
     page.get_by_role("button", name="Columns").click()
     page.get_by_label("Computer System ID").check()
     page.wait_for_timeout(300)
     heads2 = [h.strip().upper() for h in page.locator("main table thead th").all_inner_texts()]
-    check(10, "column picker adds a column", "COMPUTER SYSTEM ID" in heads2, heads2)
+    check(11, "column picker adds a column", "COMPUTER SYSTEM ID" in heads2, heads2)
     page.keyboard.press("Escape")
     page.mouse.click(5, 5)
     codes = page.locator("main table tbody tr td:first-child").all_inner_texts()
@@ -168,7 +189,7 @@ def t_equipment(page: Page):
                 "INSTRUMENT / EQUIPMENT / CONNECTED INSTRUMENT IDS", "MAKE", "MODEL", "SYSTEM TYPE", "GAMP CATEGORY",
                 "USP CLASSIFICATION", "ALLOWED ROLES", "DEPARTMENT", "VALIDATION STATUS", "VALIDATION COMPLETION DATE",
                 "INITIAL VALIDATION DATE", "LATEST VALIDATION DATE", "PERIODIC REVIEW FREQ. (MONTHS)", "INCLUDE IN BACKUP", "REMARKS"]
-    check(18, "new equipment fields in the 20-field order", order == expected, order)
+    check(19, "new equipment fields in the 20-field order", order == expected, order)
     gamp = drawer.locator("select").nth(3).locator("option").all_inner_texts()
     check(42, "GAMP options 1,3,4,5 only", gamp == ["Category 1", "Category 3", "Category 4", "Category 5"], gamp)
     inputs = drawer.locator("input:not([type=checkbox])")
@@ -178,20 +199,20 @@ def t_equipment(page: Page):
     drawer.get_by_placeholder("Type a role (e.g. Analyst) and press Enter").fill("Analyst")
     drawer.get_by_placeholder("Type a role (e.g. Analyst) and press Enter").press("Enter")
     dept = drawer.locator("select").filter(has=page.locator("option", has_text="Select department"))
-    check(19, "allowed roles typed as free text", drawer.locator("text=Analyst").count() >= 1)
+    check(20, "allowed roles typed as free text", drawer.locator("text=Analyst").count() >= 1)
     check(33, "department is a dropdown", dept.count() == 1)
     dept.select_option("R&D")
     drawer.locator("input[type=date]").first.fill("2026-10-18")
     drawer.locator("select").filter(has=page.locator("option", has_text="Under Validation")).select_option("validated")
     drawer.get_by_role("button", name="Save").click()
-    msg = toast_text(page)
+    msg = toast_text(page, r"only be set to 'Validated'")
     check(25, "saving as Validated before approval is refused", "only be set to 'Validated'" in msg, msg[-300:])
     drawer.locator("select").filter(has=page.locator("option", has_text="Under Validation")).select_option("under_validation")
     drawer.get_by_role("button", name="Save").click()
-    msg = toast_text(page)
+    msg = toast_text(page, r"Equipment \d{4} created|rror|ailed")
     m = re.search(r"Equipment (\d{4}) created", msg)
-    check(11, "new equipment gets a numeric code", m is not None, msg[-300:])
-    check(20, "save works (no 'Failed to fetch')", "Failed to fetch" not in msg)
+    check(12, "new equipment gets a numeric code", m is not None, msg[-300:])
+    check(21, "save works (no 'Failed to fetch')", "Failed to fetch" not in msg)
     check(45, "asset request raised for new equipment", "asset creation request was raised" in msg)
     globals()["NEW_CODE"] = m.group(1) if m else None
     shot(page, "05-equipment-created")
@@ -200,16 +221,16 @@ def t_equipment(page: Page):
     row = page.locator("main table tbody tr", has_text=f"UI Test HPLC {TAG}")
     row.get_by_role("button", name=re.compile("Retire")).click()
     dlg = page.locator("div.fixed.inset-0").last.inner_text()
-    check(15, "confirmation pop-up before retire", "Do you want to retire the equipment" in dlg, dlg[:150])
+    check(16, "confirmation pop-up before retire", "Do you want to retire the equipment" in dlg, dlg[:150])
     page.get_by_role("button", name="Cancel").click()
 
     # audit old/new (rows 16, 21)
     page.goto(f"{BASE}/audit")
     page.wait_for_load_state("networkidle")
     heads = [h.strip().upper() for h in page.locator("main table thead th").all_inner_texts()]
-    check(16, "audit trail has Old Value / New Value", "OLD VALUE" in heads and "NEW VALUE" in heads, heads)
+    check(17, "audit trail has Old Value / New Value", "OLD VALUE" in heads and "NEW VALUE" in heads, heads)
     first_ts = page.locator("main table tbody tr td").first.inner_text()
-    check(17, "audit timestamp DD/MM/YYYY HH:mm (24h)", re.match(r"^\d{2}/\d{2}/\d{4} \d{2}:\d{2}$", first_ts.strip()) is not None, first_ts)
+    check(18, "audit timestamp DD/MM/YYYY HH:mm (24h)", re.match(r"^\d{2}/\d{2}/\d{4} \d{2}:\d{2}$", first_ts.strip()) is not None, first_ts)
     shot(page, "06-audit")
 
 
@@ -268,7 +289,7 @@ def t_pm(page: Page):
     heads = [h.strip().upper() for h in page.locator("main table thead th").all_inner_texts()]
     check(50, "PM shows 'Computer System ID'", "COMPUTER SYSTEM ID" in heads, heads)
     code = globals().get("NEW_CODE")
-    check(18, "equipment with Computer System ID is on PM list", code and page.locator("main table tbody tr", has_text=code).count() == 1, code)
+    check(19, "equipment with Computer System ID is on PM list", code and page.locator("main table tbody tr", has_text=code).count() == 1, code)
     # add additional system (row 52)
     page.get_by_role("button", name=re.compile("Add system")).click()
     dlg = page.locator("div.fixed.inset-0").last
@@ -276,9 +297,9 @@ def t_pm(page: Page):
     dlg.locator("input").nth(1).fill("SRV-01")
     dlg.locator("input").nth(2).fill("CS-SRV-01")
     dlg.get_by_role("button", name=re.compile("Add|Save")).last.click()
-    page.wait_for_timeout(1500)
+    added = wait_row(page, f"File Server {TAG}", "Additional")
     row = page.locator("main table tbody tr", has_text=f"File Server {TAG}")
-    check(52, "additional system added to PM list", row.count() == 1)
+    check(52, "additional system added to PM list", row.count() == 1, added)
     # mark done with e-signature (rows 53, 64)
     row.get_by_role("button", name=re.compile("Mark done")).click()
     form = page.locator("div.fixed.inset-0").last
@@ -288,9 +309,9 @@ def t_pm(page: Page):
     cred = page.locator("div.fixed.inset-0").last.inner_text()
     check(64, "update asks for user ID and password", "USER ID" in cred.upper() and "PASSWORD" in cred.upper(), cred[:150])
     esign(page)
-    page.wait_for_timeout(1500)
+    done = wait_row(page, f"File Server {TAG}", DATE_RE.pattern)
     row = page.locator("main table tbody tr", has_text=f"File Server {TAG}")
-    check(52, "additional system marked done", DATE_RE.search(row.inner_text()) is not None, row.inner_text())
+    check(52, "additional system marked done", DATE_RE.search(done) is not None, done)
     row.get_by_role("button", name=re.compile("History")).click()
     page.wait_for_timeout(2500)
     hist = page.locator("div.fixed.inset-0").last.inner_text()
@@ -316,6 +337,7 @@ def t_backup(page: Page):
     check(60, "backup filters type + department", page.locator("main select").count() >= 2)
     check(59, "backup report download", "Export" in body)
     row = page.locator("main table tbody tr").first
+    bk_code = row.locator("td").first.inner_text().strip()
     row.get_by_role("button", name=re.compile("Mark done")).click()
     form = page.locator("div.fixed.inset-0").last
     freq = form.locator("input[type=number]").first
@@ -327,8 +349,7 @@ def t_backup(page: Page):
     form.get_by_role("button", name=re.compile("Save|Continue|Next")).last.click()
     page.wait_for_timeout(300)
     esign(page)
-    page.wait_for_timeout(1500)
-    row_text = page.locator("main table tbody tr").first.inner_text()
+    row_text = wait_row(page, bk_code, r"Backups")
     check(58, "backup path + frequency saved", "D:\\Backups\\UI" in row_text and "14" in row_text, row_text)
     shot(page, "11-backup")
 
@@ -342,12 +363,13 @@ def t_periodic(page: Page):
     check(68, "periodic review filters type + department", page.locator("main select").count() >= 2)
     check(67, "periodic review report download", "Export" in body)
     row = page.locator("main table tbody tr").first
+    pr_code = row.locator("td").first.inner_text().strip()
     row.get_by_role("button", name=re.compile("Mark done")).click()
     page.locator("div.fixed.inset-0").last.get_by_role("button", name=re.compile("Save|Continue|Next")).last.click()
     page.wait_for_timeout(300)
     esign(page)
-    page.wait_for_timeout(1500)
-    check(70, "periodic review updated with e-signature", DATE_RE.search(page.locator("main table tbody tr").first.inner_text()) is not None)
+    pr_text = wait_row(page, pr_code, DATE_RE.pattern)
+    check(70, "periodic review updated with e-signature", DATE_RE.search(pr_text) is not None, pr_text)
     page.locator("main").get_by_role("button", name=re.compile("Planner")).first.click()
     page.wait_for_timeout(1500)
     plan = page.locator("div.fixed.inset-0").last.inner_text()
@@ -424,7 +446,7 @@ def t_requests(page: Page):
     page.locator("main textarea").first.fill("Reviewed OK")
     page.locator("main").get_by_role("button", name=re.compile("^Approve")).click()
     esign(page, "Reviewed")
-    page.wait_for_timeout(2000)
+    toast_text(page, r"Waiting on QA")
     body = page.locator("main").inner_text()
     check(78, "review e-signed, moves to QA", "QA" in body)
     check(79, "comment box locked after status moves forward", page.locator("main textarea").count() == 0)
@@ -436,7 +458,7 @@ def t_requests(page: Page):
     page.wait_for_load_state("networkidle")
     page.locator("main").get_by_role("button", name=re.compile("^Approve")).click()
     esign(page, "QA approved")
-    page.wait_for_timeout(2000)
+    toast_text(page, r"(?i)waiting on it executor|pending execution")
     check(78, "QA approval e-signed", "execution" in page.locator("main").inner_text().lower())
 
     login(page, "ADM001", "P1")
@@ -447,7 +469,7 @@ def t_requests(page: Page):
     main.locator("input[type=password]").first.fill("Temp@1234")
     main.get_by_role("button", name=re.compile("Complete execution|Execute")).click()
     esign(page, "Account created")
-    page.wait_for_timeout(2000)
+    toast_text(page, r"(?i)acknowledg")
     check(31, "IT Executor (Admin) completes execution", "acknowledg" in page.locator("main").inner_text().lower())
     shot(page, "15-executed")
 

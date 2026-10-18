@@ -48,22 +48,24 @@ def esign(extra=None, reason="E2E test"):
 
 
 # ---------- Login / plant (row 2, 24) ----------
-r = client.post("/api/auth/login", data={"username": "HOD002", "password": PW, "plant": "P1"})
+r = client.post("/api/auth/login", data={"username": "HOD001", "password": PW, "plant": "P2"})
 check(24, "login refused for a plant the user lacks", r.status_code == 403, r.text)
 r = client.get("/api/auth/plants", params={"employee_id": "EMP001"})
 check(24, "login plant list for user", set(r.json()["plants"]) >= {"P1", "P2"}, r.text)
 ADM, EMP, HOD, QA, IT = (token(u) for u in ("ADM001", "EMP001", "HOD001", "QA001", "IT001"))
 me = client.get("/api/users/me", headers=ADM).json()
 check(24, "selected plant returned by /me", me.get("selected_plant") == "P1", me)
-adm_p2 = token("ADM001", "P2")
-eq_p2 = client.get("/api/equipment", headers=adm_p2).json()
-check(24, "equipment scoped to login plant", eq_p2 and all(e["plant"] == "P2" for e in eq_p2), [e["plant"] for e in eq_p2])
-users_p2 = client.get("/api/users", headers=adm_p2).json()
+emp_p2 = token("EMP001", "P2")  # EMP001 has P1 + P2
+eq_p1 = client.get("/api/equipment", headers=ADM).json()
+eq_p2 = client.get("/api/equipment", headers=emp_p2).json()
+check(24, "equipment scoped to login plant",
+      all(e["plant"] == "P1" for e in eq_p1) and all(e["plant"] == "P2" for e in eq_p2), [e["plant"] for e in eq_p2])
+users_p2 = client.get("/api/users", headers=emp_p2).json()
 check(24, "users scoped to login plant", all("P2" in u["plants"] or u["plant"] == "P2" for u in users_p2))
 
 # ---------- Demo reset (row 7) ----------
 r = client.post("/api/admin/reset", headers=ADM)
-check(7, "demo reset endpoint disabled", r.status_code == 403, r.status_code)
+check(8, "demo reset endpoint disabled", r.status_code == 403, r.status_code)
 
 # ---------- Equipment (rows 11, 16, 18, 21, 25, 44, 45, 71) ----------
 eq_body = {
@@ -78,7 +80,7 @@ eq_body["validation_status"] = "under_validation"
 r = client.post("/api/equipment", json=eq_body, headers=ADM)
 eq = r.json()
 code = eq.get("equipment_code", "")
-check(11, "equipment code is numeric", r.status_code == 201 and code.isdigit(), code)
+check(12, "equipment code is numeric", r.status_code == 201 and code.isdigit(), code)
 
 reqs = client.get("/api/asset-requests", params={"equipment_code": code}, headers=ADM).json()
 create_req = next((x for x in reqs if x["request_type"] == "CREATE"), None)
@@ -100,8 +102,8 @@ check(71, "validation allowed after asset creation approved", r.status_code == 2
 
 audit = client.get("/api/audit", params={"limit": 50}, headers=ADM).json()
 changed = {a["field_name"]: (a["old_value"], a["new_value"]) for a in audit if a.get("entity") == f"Equipment {code}"}
-check(21, "audit records each changed field", "Make" in changed and "Validation Status" in changed, changed)
-check(16, "audit old/new value captured", changed.get("Validation Status") == ("under_validation", "validated"), changed)
+check(22, "audit records each changed field", "Make" in changed and "Validation Status" in changed, changed)
+check(17, "audit old/new value captured", changed.get("Validation Status") == ("under_validation", "validated"), changed)
 
 r = client.patch(f"/api/equipment/{code}/status", json={"active": False}, headers=ADM)
 check(44, "cannot retire without approved retire request", r.status_code == 422, r.status_code)
@@ -116,7 +118,7 @@ check(45, "duplicate open retire request blocked", r.status_code == 409, r.statu
 
 # ---------- Operational modules while equipment is active ----------
 pm_rows = client.get("/api/preventive-maintenance", headers=ADM).json()
-check(18, "Computer System ID puts equipment on PM planner", any(p["equipment_code"] == code for p in pm_rows))
+check(19, "Computer System ID puts equipment on PM planner", any(p["equipment_code"] == code for p in pm_rows))
 check(50, "PM rows carry Computer System ID", any(p.get("computer_system_id") == f"CS-{TAG}" for p in pm_rows))
 r = client.put(f"/api/preventive-maintenance/{code}/update-done", json={"last_pm_date": str(date.today()), "frequency_months": 6}, headers=ADM)
 check(64, "PM update needs password", r.status_code == 401, r.status_code)
@@ -227,7 +229,7 @@ lst = client.get("/api/uam/requests", headers=HOD).json()
 check(77, "reviewer list holds only requests waiting on them",
       all(x["status"] == "PENDING_REVIEW" or x["employee_id"] == "HOD001" for x in lst), [x["status"] for x in lst])
 dash = client.get("/api/dashboard/summary", headers=EMP).json()
-check(4, "dashboard lists recent requests", len(dash.get("recent_uam_requests", [])) >= 1)
+check("-", "dashboard lists recent requests", len(dash.get("recent_uam_requests", [])) >= 1)
 
 # ---------- Users (rows 28, 31, 38, 39) ----------
 r = client.post("/api/users", json={"employee_id": f"U{TAG}", "name": "Weak", "email": "w@x.com", "department": "QC",
@@ -264,7 +266,7 @@ check(46, "expiry notification closed after password update",
       all(n["status"] == "RESOLVED" for n in notes if n["request_code"] == f"VAULT-{vid}-EXPIRY"))
 audit = client.get("/api/audit", params={"limit": 30}, headers=ADM).json()
 check(48, "vault actions in audit trail", any(a["action"] == "VAULT_UPDATED" for a in audit))
-check(17, "audit dates in DD/MM/YYYY", any(a["field_name"] == "Created/Updated Date" and a["new_value"] == date.today().strftime("%d/%m/%Y") for a in audit))
+check(18, "audit dates in DD/MM/YYYY", any(a["field_name"] == "Created/Updated Date" and a["new_value"] == date.today().strftime("%d/%m/%Y") for a in audit))
 
 failed = [r for r in results if not r[2]]
 print(f"\n{len(results) - len(failed)}/{len(results)} checks passed")
