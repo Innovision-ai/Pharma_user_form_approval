@@ -11,6 +11,7 @@ import { Modal } from "../components/ui/Modal";
 import { Field, FieldLabel, Input, Textarea } from "../components/ui/Input";
 import { useToast } from "../components/ui/Toast";
 import { DataTable } from "../components/ui/DataTable";
+import { formatDateTime } from "../lib/format";
 
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
@@ -159,7 +160,7 @@ export function RequestDetailPage() {
             <DetailRow label="Requested Role" value={request.requested_role} />
             <DetailRow label="HOD" value={request.hod_name} />
             <DetailRow label="QA" value={request.qa_name} />
-            <DetailRow label="Submitted" value={new Date(request.created_at).toLocaleString()} />
+            <DetailRow label="Submitted" value={formatDateTime(request.created_at)} />
           </div>
           <div className="mt-4">
             <p className="text-xs font-medium text-slate-500">Reason for Access</p>
@@ -226,7 +227,7 @@ export function RequestDetailPage() {
           <CardBody>
             <div className="grid grid-cols-2 gap-4">
               <DetailRow label="Acknowledged By" value={request.acknowledged_by || "-"} />
-              <DetailRow label="Date & Time" value={new Date(request.acknowledged_at).toLocaleString()} />
+              <DetailRow label="Date & Time" value={formatDateTime(request.acknowledged_at)} />
             </div>
           </CardBody>
         </Card>
@@ -244,7 +245,7 @@ export function RequestDetailPage() {
               rows={auditLogs}
               rowKey={(r) => `${r.timestamp}-${r.user_employee_id}-${r.action}`}
               columns={[
-                { header: "Timestamp", render: (r) => new Date(r.timestamp).toLocaleString() },
+                { header: "Timestamp", render: (r) => formatDateTime(r.timestamp) },
                 { header: "User", render: (r) => `${r.user_name} (${r.user_employee_id})` },
                 { header: "Action", render: (r) => r.action },
                 { header: "Details", render: (r) => r.description },
@@ -266,7 +267,7 @@ export function RequestDetailPage() {
               className="rounded-md border border-slate-100 bg-slate-50 px-3 py-2"
             >
               <p className="text-xs font-medium text-slate-500">
-                To: {n.recipient_name} ({n.recipient_email}) - {new Date(n.created_at).toLocaleString()}
+                To: {n.recipient_name} ({n.recipient_email}) - {formatDateTime(n.created_at)}
               </p>
               <p className="text-sm font-semibold text-slate-800">{n.subject}</p>
               <p className="text-sm text-slate-600">{n.body}</p>

@@ -15,8 +15,10 @@ import { formatDate } from "../lib/format";
 
 function ExpiryBadge({ entry }: { entry: VaultEntry }) {
   if (!entry.expiry_date) return null;
-  const d = new Date(entry.expiry_date);
-  const days = Math.ceil((d.getTime() - Date.now()) / 86400000);
+  // Date-only math on local dates, so the badge is never off by a day.
+  const [y, m, d] = entry.expiry_date.split("-").map(Number);
+  const now = new Date();
+  const days = Math.round((new Date(y, m - 1, d).getTime() - new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()) / 86400000);
   if (days < 0) return <Badge tone="red">Expired</Badge>;
   if (days <= 10) return <Badge tone="amber">Expires in {days}d</Badge>;
   return <Badge tone="green">Exp {formatDate(entry.expiry_date)}</Badge>;
@@ -127,7 +129,7 @@ export function PasswordVaultPage() {
       <PageHeader
         eyebrow="Security"
         title="Password Vault"
-        description="Securely store equipment credentials. Visible only to you."
+        description="Securely store equipment credentials. Visible only to you. You will be notified 10 days before a password expires."
         actions={<Button onClick={() => setShowAdd(!showAdd)}><Plus size={16} className="mr-1" />Add entry</Button>}
       />
 
@@ -189,9 +191,9 @@ export function PasswordVaultPage() {
                 render: (e) => <span className="text-sm">{formatDate(e.created_date)}</span>,
               },
               {
-                header: "Expiry",
-                render: (e) => e.expiry_days
-                  ? <span className="text-sm text-slate-600">In {e.expiry_days} days</span>
+                header: "Expiry Date",
+                render: (e) => e.expiry_date
+                  ? <span className="text-sm text-slate-600">{formatDate(e.expiry_date)}</span>
                   : <span className="text-slate-400">—</span>,
               },
               {

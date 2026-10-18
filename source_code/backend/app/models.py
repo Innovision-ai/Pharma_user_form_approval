@@ -148,6 +148,7 @@ class UAMRequest(Base):
     it_executor_id: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     status: Mapped[str] = mapped_column(String(40), index=True)
     rejection_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    auth_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # reason given at the last e-signature
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -252,6 +253,7 @@ class BackupScheduleEntry(Base):
     last_backup_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     next_backup_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     frequency_days: Mapped[int] = mapped_column(Integer, default=30)
+    backup_path: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     updated_by: Mapped[str] = mapped_column(String(120), default="")
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -14,6 +14,7 @@ from typing import Optional
 
 from dateutil.relativedelta import relativedelta
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -36,7 +37,7 @@ def _active_validated_equipment(
         .filter(
             Equipment.active.is_(True),
             Equipment.periodic_review_frequency.isnot(None),
-            Equipment.validation_status != "under_validation",
+            or_(Equipment.validation_status.is_(None), Equipment.validation_status != "under_validation"),
         )
     )
     if plant:
@@ -192,16 +193,16 @@ def update_done(
         db, current_user, "PERIODIC_REVIEW_UPDATED",
         f"Periodic review updated for {eq.name} ({equipment_code})" + (f" — {reason}" if reason else ""),
         entity=equipment_code, field="Last Review Date",
-        old=old_last.isoformat() if old_last else None,
-        new=last_date.isoformat(),
+        old=old_last,
+        new=last_date,
         plant=eq.plant,
     )
     log_audit(
         db, current_user, "PERIODIC_REVIEW_UPDATED",
         f"Next review date updated",
         entity=equipment_code, field="Next Review Date",
-        old=old_next.isoformat() if old_next else None,
-        new=next_date.isoformat(),
+        old=old_next,
+        new=next_date,
         plant=eq.plant,
         commit=False,
     )

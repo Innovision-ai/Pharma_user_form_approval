@@ -65,6 +65,7 @@ def _maybe_notify(db: Session, entry: PasswordVaultEntry, user: User) -> None:
     existing = db.query(Notification).filter(
         Notification.request_code == notif_code,
         Notification.type == "VAULT_EXPIRY",
+        Notification.status != "RESOLVED",
     ).first()
     if existing:
         return
@@ -76,7 +77,8 @@ def _maybe_notify(db: Session, entry: PasswordVaultEntry, user: User) -> None:
     )
     body = (
         f"The vault entry for equipment '{entry.equipment_name}' (code: {entry.equipment_code}) "
-        f"will expire on {entry.expiry_date.isoformat()}. Please update the password."
+        f"will expire on {entry.expiry_date.strftime('%d/%m/%Y')}. Please change the password and "
+        f"update the vault entry."
     )
     notif = Notification(
         request_code=notif_code,
@@ -89,6 +91,36 @@ def _maybe_notify(db: Session, entry: PasswordVaultEntry, user: User) -> None:
     )
     db.add(notif)
     db.commit()
+
+
+def sweep_expiry_notifications(db: Session) -> int:
+    """Raise the 10-day expiry notification for every owner's entries (run on
+    dashboard / notification loads so it does not depend on opening the vault)."""
+    soon = date.today() + timedelta(days=EXPIRY_WARN_DAYS)
+    entries = db.query(PasswordVaultEntry).filter(
+        PasswordVaultEntry.expiry_date.isnot(None),
+        PasswordVaultEntry.expiry_date <= soon,
+        PasswordVaultEntry.expiry_date >= date.today(),
+    ).all()
+    owners = {u.employee_id: u for u in db.query(User).filter(
+        User.employee_id.in_({e.owner_employee_id for e in entries})).all()} if entries else {}
+    raised = 0
+    for entry in entries:
+        owner = owners.get(entry.owner_employee_id)
+        if owner:
+            before = db.query(Notification).count()
+            _maybe_notify(db, entry, owner)
+            raised += db.query(Notification).count() - before
+    return raised
+
+
+def _resolve_notifications(db: Session, entry: PasswordVaultEntry) -> None:
+    """Password changed: close the open expiry notification so the next cycle can raise a new one."""
+    db.query(Notification).filter(
+        Notification.request_code == f"VAULT-{entry.id}-EXPIRY",
+        Notification.type == "VAULT_EXPIRY",
+        Notification.status != "RESOLVED",
+    ).update({Notification.status: "RESOLVED"}, synchronize_session=False)
 
 
 @router.get("", response_model=list[VaultEntryOut])
@@ -172,6 +204,7 @@ def update_entry(
     # Update password and reset the creation/last-updated date to today
     entry.encrypted_password = _encrypt(payload.password)
     entry.created_date = date.today()
+    _resolve_notifications(db, entry)
     entry.expiry_days = payload.expiry_days
     if payload.expiry_days:
         entry.expiry_date = entry.created_date + timedelta(days=payload.expiry_days)
@@ -190,16 +223,16 @@ def update_entry(
         db, current_user, "VAULT_UPDATED",
         f"Vault entry created/updated date changed",
         entity=f"Vault:{entry.equipment_code}", field="Created/Updated Date",
-        old=old_date.isoformat() if old_date else None,
-        new=entry.created_date.isoformat(),
+        old=old_date,
+        new=entry.created_date,
     )
     if old_expiry != entry.expiry_date:
         log_audit(
             db, current_user, "VAULT_UPDATED",
             f"Vault entry expiry date changed",
             entity=f"Vault:{entry.equipment_code}", field="Expiry Date",
-            old=old_expiry.isoformat() if old_expiry else None,
-            new=entry.expiry_date.isoformat() if entry.expiry_date else None,
+            old=old_expiry,
+            new=entry.expiry_date,
         )
     return _with_password(entry)
 

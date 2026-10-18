@@ -3,11 +3,12 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app import password_policy
 from app.database import get_db
-from app.deps import get_current_user, require_role
+from app.deps import get_current_plant, get_current_user, get_optional_plant, require_role
 from app.constants import ROLE_ADMIN
 from app.models import User
-from app.schemas import UserCreate, UserOut, UserUpdate
+from app.schemas import UserCreate, UserImportRequest, UserOut, UserUpdate
 from app.audit import log_audit, diff_and_log
 
 router = APIRouter(prefix="/api/users", tags=["users"])
@@ -36,8 +37,21 @@ def _user_snap(user: User) -> dict:
 
 
 @router.get("/me", response_model=UserOut)
-def whoami(current_user: User = Depends(get_current_user)):
-    return current_user
+def whoami(
+    current_user: User = Depends(get_current_user),
+    plant: Optional[str] = Depends(get_current_plant),
+):
+    out = UserOut.model_validate(current_user)
+    out.selected_plant = plant
+    out.password_expired = password_policy.is_expired(current_user)
+    return out
+
+
+def _check_new_password(password: Optional[str]) -> None:
+    if password:
+        err = password_policy.validate_complexity(password)
+        if err:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, err)
 
 
 @router.get("", response_model=list[UserOut])
@@ -47,6 +61,7 @@ def list_users(
     active: Optional[bool] = None,
     search: Optional[str] = None,
     db: Session = Depends(get_db),
+    token_plant: Optional[str] = Depends(get_optional_plant),
 ):
     q = db.query(User)
     if role:
@@ -63,7 +78,11 @@ def list_users(
             (User.email.ilike(like)) |
             (User.department.ilike(like))
         )
-    return q.order_by(User.employee_id).all()
+    users = q.order_by(User.employee_id).all()
+    if token_plant:
+        # Plant-wise segregation: only users who have access to the login plant
+        users = [u for u in users if token_plant in u.plants_list()]
+    return users
 
 
 @router.post("", response_model=UserOut, status_code=status.HTTP_201_CREATED)
@@ -80,13 +99,13 @@ def create_user(
     user_data = data.model_dump()
     plants_list = user_data.pop("plants", [])
     password = user_data.pop("password", None)
+    _check_new_password(password)
 
     user = User(**user_data)
     user.plants = ",".join(plants_list) if plants_list else None
 
     if password:
-        from app.auth import get_password_hash
-        user.hashed_password = get_password_hash(password)
+        password_policy.apply_new_password(user, password)
 
     db.add(user)
     db.commit()
@@ -97,6 +116,59 @@ def create_user(
         entity=user.employee_id, field="Status", old=None, new="Active",
     )
     return user
+
+
+@router.post("/import")
+def import_users(
+    data: UserImportRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(ROLE_ADMIN)),
+):
+    """Option 2 of user creation: users fetched from Active Directory / ERP.
+    Takes the directory export (CSV parsed by the UI); existing usernames are skipped."""
+    created, skipped, errors = [], [], []
+    for row in data.users:
+        if db.query(User).filter(User.employee_id == row.employee_id).first():
+            skipped.append(row.employee_id)
+            continue
+        if row.password:
+            err = password_policy.validate_complexity(row.password)
+            if err:
+                errors.append(f"{row.employee_id}: {err}")
+                continue
+        plants = row.plants or [row.plant]
+        user = User(
+            employee_id=row.employee_id, name=row.name, email=row.email,
+            department=row.department, plant=row.plant, plants=",".join(plants),
+            role=row.role, active=True, auth_source="DIRECTORY",
+        )
+        if row.password:
+            password_policy.apply_new_password(user, row.password)
+        db.add(user)
+        db.flush()
+        log_audit(db, current_user, "USER_IMPORTED",
+                  f"Imported user {user.employee_id}: {user.name} ({user.role}) from AD/ERP",
+                  entity=user.employee_id, field="Status", old=None, new="Active", commit=False)
+        created.append(row.employee_id)
+    db.commit()
+    return {"created": created, "skipped": skipped, "errors": errors}
+
+
+@router.post("/{employee_id}/unlock")
+def unlock_user(
+    employee_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(ROLE_ADMIN)),
+):
+    user = db.query(User).filter(User.employee_id == employee_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    user.locked = False
+    user.failed_attempts = 0
+    db.commit()
+    log_audit(db, current_user, "USER_UNLOCKED", f"User {employee_id} unlocked",
+              entity=employee_id, field="Account Lock", old="Locked", new="Unlocked")
+    return {"employee_id": employee_id, "locked": False}
 
 
 @router.get("/{employee_id}", response_model=UserOut)

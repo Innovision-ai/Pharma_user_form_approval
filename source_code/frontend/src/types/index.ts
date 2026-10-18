@@ -141,10 +141,11 @@ export interface DashboardSummary {
   user_equipment_count: number;
   user_pending_actions: number;
   validation_alerts: number;
+  recent_uam_requests: UAMRequest[];
 }
 
-export type UAMTemplate = "MANUFACTURING" | "QC" | "ERP";
-export type UAMAssetType = "EQUIPMENT" | "SOFTWARE";
+export type UAMTemplate = "MANUFACTURING" | "QC" | "ERP" | "FOLDER_PROJECT";
+export type UAMAssetType = "EQUIPMENT" | "SOFTWARE" | "FOLDER";
 export type UAMAction = "CREATE" | "MODIFY" | "DEACTIVATE" | "ACTIVATE" | "UNLOCK" | "CHANGE_PASSWORD";
 export type UAMStatus = "PENDING_REVIEW" | "PENDING_DEPARTMENT_APPROVAL" | "PENDING_QA_APPROVAL" | "PENDING_EXECUTION" | "PENDING_INITIATOR_ACK" | "CORRECTION_REQUIRED" | "SUSPENDED" | "CANCELLED" | "COMPLETED" | "REJECTED";
 
@@ -167,8 +168,26 @@ export interface UAMRequest {
   qa_approver_id: string | null;
   it_executor_id: string | null;
   rejection_reason: string | null;
+  auth_reason?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface UAMSelectorUser { id: string; name: string; department?: string }
+export interface UAMSelectors {
+  reviewers: UAMSelectorUser[];
+  department_approvers: UAMSelectorUser[];
+  qa_approvers: UAMSelectorUser[];
+  it_executors: UAMSelectorUser[];
+}
+export interface UAMEquipmentOption {
+  equipment_code: string;
+  name: string;
+  type: string;
+  system_type?: string | null;
+  department: string;
+  allowed_roles: string[];
+  has_user_id: boolean;
 }
 
 export interface Plant { code: string; name: string; active: boolean; }
@@ -210,6 +229,8 @@ export interface AssetCreationRequest {
   it_executor_id?: string | null;
   qa_approver_id?: string | null;
   plant: string;
+  request_type?: "CREATE" | "RETIRE" | null;
+  equipment_code?: string | null;
   status: AssetCreationStatus;
   rejection_reason?: string | null;
   form_data: Record<string, unknown>;
@@ -250,6 +271,11 @@ export interface BackupScheduleRow {
 
 export interface PMRow {
   equipment_code: string;
+  source?: "equipment" | "additional";
+  additional_id?: number;
+  system_id?: string | null;
+  department?: string | null;
+  plant?: string | null;
   equipment_name: string;
   system_type?: string | null;
   computer_system_id?: string | null;
@@ -272,6 +298,7 @@ export interface VaultEntry {
   expiry_days?: number | null;
   expiry_date?: string | null;
   updated_at: string;
+  expiry_flag?: string | null;
 }
 
 // Validation alerts

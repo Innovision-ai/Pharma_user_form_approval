@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends
+import os
+
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.constants import ROLE_ADMIN
@@ -12,7 +14,10 @@ router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 @router.post("/reset")
 def reset_demo_data(db: Session = Depends(get_db), current_user: User = Depends(require_role(ROLE_ADMIN))):
-    """Wipes every table and reloads the fixed seed dataset - for resetting the demo between walkthroughs."""
+    """Wipes every table and reloads the fixed seed dataset - for resetting the demo between walkthroughs.
+    Disabled unless ALLOW_DEMO_RESET=1, so live data cannot be wiped by one click."""
+    if os.getenv("ALLOW_DEMO_RESET") != "1":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Demo data reset is disabled on this system")
     seed.run_seed(db)
     log = AuditLog(
         user_employee_id=current_user.employee_id,

@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import get_current_user, require_role
+from app.deps import get_current_user, get_optional_plant, require_role
 from app.constants import ROLE_ADMIN, ASSET_STATUS_APPROVED
 from app.models import AuditLog, Equipment, User, AssetCreationRequest
 from app.schemas import EquipmentCreate, EquipmentOut, EquipmentUpdate, StatusToggle
@@ -22,10 +22,13 @@ def list_equipment(
     system_type: Optional[str] = None,
     validation_status: Optional[str] = None,
     db: Session = Depends(get_db),
+    token_plant: Optional[str] = Depends(get_optional_plant),
 ):
     q = db.query(Equipment)
     if active_only:
         q = q.filter(Equipment.active.is_(True))
+    # Data is segregated by the plant chosen at login
+    plant = token_plant or plant
     if plant:
         q = q.filter(Equipment.plant == plant)
     if type:
@@ -41,17 +44,16 @@ def list_equipment(
 def validation_alerts(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    token_plant: Optional[str] = Depends(get_optional_plant),
 ):
     """Return equipment under_validation that is >= 60 days since creation."""
-    threshold = date.today() - timedelta(days=60)
-    items = (
-        db.query(Equipment)
-        .filter(
-            Equipment.validation_status == "under_validation",
-            Equipment.active.is_(True),
-        )
-        .all()
+    q = db.query(Equipment).filter(
+        Equipment.validation_status == "under_validation",
+        Equipment.active.is_(True),
     )
+    if token_plant:
+        q = q.filter(Equipment.plant == token_plant)
+    items = q.all()
     alerts = []
     for item in items:
         created = item.created_at.date() if item.created_at else date.today()
@@ -68,24 +70,40 @@ def validation_alerts(
     return alerts
 
 
-def _next_equipment_code(db: Session) -> str:
-    """Return the next free EQ-### code.
+def next_equipment_code(db: Session) -> str:
+    """Return the next free numeric code (0001, 0002, ...).
 
-    Uses the highest numeric suffix among existing EQ- codes (not the last
-    inserted row, which may be e.g. SW-001) and guarantees uniqueness.
+    Legacy codes such as EQ-001 / SW-001 are kept as they are; only all-digit
+    codes count towards the sequence.
     """
     existing = {code for (code,) in db.query(Equipment.equipment_code).all()}
-    max_seq = 0
-    for code in existing:
-        if code and code.upper().startswith("EQ-"):
-            try:
-                max_seq = max(max_seq, int(code.split("-", 1)[1]))
-            except ValueError:
-                continue
+    max_seq = max((int(c) for c in existing if c and c.isdigit()), default=0)
     next_seq = max_seq + 1
-    while f"EQ-{next_seq:03d}" in existing:
+    while f"{next_seq:04d}" in existing:
         next_seq += 1
-    return f"EQ-{next_seq:03d}"
+    return f"{next_seq:04d}"
+
+
+_next_equipment_code = next_equipment_code  # backward-compatible name
+
+
+def _require_approved_create(db: Session, code: Optional[str]) -> None:
+    approved_create = None
+    if code:
+        approved_create = (
+            db.query(AssetCreationRequest)
+            .filter(
+                AssetCreationRequest.equipment_code == code,
+                AssetCreationRequest.request_type == "CREATE",
+                AssetCreationRequest.status == ASSET_STATUS_APPROVED,
+            )
+            .first()
+        )
+    if not approved_create:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "Equipment can only be set to 'Validated' after its Asset Creation request has been approved."
+        )
 
 
 def _apply_extended_fields(item: Equipment, payload: EquipmentCreate) -> None:
@@ -157,8 +175,10 @@ def create_equipment(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(ROLE_ADMIN)),
 ):
+    if payload.validation_status == "validated":
+        _require_approved_create(db, None)
     item = Equipment(
-        equipment_code=_next_equipment_code(db),
+        equipment_code=next_equipment_code(db),
         name=payload.name,
         type=payload.type,
         location=payload.location,
@@ -170,11 +190,16 @@ def create_equipment(
     )
     _apply_extended_fields(item, payload)
     db.add(item)
+    db.flush()
+    # Every newly added equipment gets an asset creation request; once it is
+    # approved the equipment can be validated (and later retired by request).
+    from app.routers.asset_requests import create_linked_create_request
+    asset_req = create_linked_create_request(db, item, current_user)
     db.commit()
     db.refresh(item)
     log_audit(
         db, current_user, "EQUIPMENT_CREATED",
-        f"Created equipment {item.equipment_code}: {item.name}",
+        f"Created equipment {item.equipment_code}: {item.name} (asset request {asset_req.request_code})",
         entity=item.equipment_code, field="Status", old=None, new="Active",
         plant=item.plant,
     )
@@ -209,20 +234,7 @@ def update_equipment(
     current_val_status = item.validation_status or ""
     new_val_status = payload.validation_status or ""
     if new_val_status == "validated" and current_val_status != "validated":
-        approved_create = (
-            db.query(AssetCreationRequest)
-            .filter(
-                AssetCreationRequest.equipment_code == code,
-                AssetCreationRequest.request_type == "CREATE",
-                AssetCreationRequest.status == ASSET_STATUS_APPROVED,
-            )
-            .first()
-        )
-        if not approved_create:
-            raise HTTPException(
-                status.HTTP_422_UNPROCESSABLE_ENTITY,
-                "Equipment can only be set to 'Validated' after its Asset Creation request has been approved."
-            )
+        _require_approved_create(db, code)
 
     item.name = payload.name
     item.type = payload.type

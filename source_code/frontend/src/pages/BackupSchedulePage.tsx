@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Printer, Download, Calendar, Search } from "lucide-react";
+import { Calendar, Download, Printer, Search } from "lucide-react";
 import { api } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import type { BackupScheduleRow } from "../types";
@@ -13,46 +13,50 @@ import { CredentialsDialog } from "../components/ui/CredentialsDialog";
 import { PageHeader } from "../components/ui/PageHeader";
 import { useToast } from "../components/ui/Toast";
 import { formatDate } from "../lib/format";
-import { downloadCsv, printReport } from "../components/PrintReport";
-
-function DueBadge({ row }: { row: BackupScheduleRow }) {
-  // Note: last/next backup removed from display per client request
-  // We show frequency only, no dates
-  const r = row as Record<string, unknown>;
-  const freq = r.frequency_days as number | undefined;
-  return <span className="text-sm text-slate-600">{freq ?? 30} days</span>;
-}
+import { PrintReport, downloadCsv, printReport } from "../components/PrintReport";
 
 const TYPE_OPTIONS = ["Hardware", "Software", "Instrument", "Equipment"];
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const today = () => new Date().toISOString().split("T")[0];
+const str = (v: unknown) => (v == null ? "" : String(v));
+
+const CSV_HEADERS = ["Code", "System Name", "Type", "Department", "Computer System ID", "Frequency (days)", "Backup Path", "Updated By"];
+const csvRow = (r: BackupScheduleRow) => [
+  r.equipment_code, r.equipment_name, str(r.type), str(r.department), str(r.computer_system_id),
+  str(r.frequency_days ?? 30), str(r.backup_path), str(r.updated_by),
+];
 
 export function BackupSchedulePage() {
   const { currentUser } = useAuth();
   const { showToast } = useToast();
+  const canUpdate = currentUser?.role === "IT" || currentUser?.role === "ADMIN";
+
   const [rows, setRows] = useState<BackupScheduleRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState({ type: "", department: "" });
+  const [departments, setDepartments] = useState<string[]>([]);
 
-  // Planner modal
+  // Mark done
+  const [target, setTarget] = useState<BackupScheduleRow | null>(null);
+  const [form, setForm] = useState({ date: today(), freq: "30", path: "", notes: "" });
+  const [credOpen, setCredOpen] = useState(false);
+
+  // Planner
   const [plannerOpen, setPlannerOpen] = useState(false);
   const [plannerYear, setPlannerYear] = useState(String(new Date().getFullYear()));
   const [plannerMonth, setPlannerMonth] = useState("");
   const [plannerRows, setPlannerRows] = useState<BackupScheduleRow[]>([]);
   const [plannerLoading, setPlannerLoading] = useState(false);
+  const [printMode, setPrintMode] = useState<"list" | "planner">("list");
 
-  // Update-done form
-  const [updateTarget, setUpdateTarget] = useState<BackupScheduleRow | null>(null);
-  const [updateDate, setUpdateDate] = useState(new Date().toISOString().split("T")[0]);
-  const [updateFreq, setUpdateFreq] = useState("30");
-  const [updateNotes, setUpdateNotes] = useState("");
-  const [updatePath, setUpdatePath] = useState("");
-  const [credOpen, setCredOpen] = useState(false);
-
-  const canUpdate = currentUser?.role === "IT" || currentUser?.role === "ADMIN";
+  useEffect(() => {
+    api.getDepartments().then((d) => setDepartments(d.departments)).catch(() => setDepartments([]));
+  }, []);
 
   const load = () => {
     setLoading(true);
-    api.listBackupSchedule({ type: filters.type || undefined, department: filters.department || undefined, search: search || undefined })
+    api.listBackupSchedule({ type: filters.type || undefined, department: filters.department || undefined })
       .then(setRows)
       .catch((e) => showToast(e instanceof Error ? e.message : "Load failed", "error"))
       .finally(() => setLoading(false));
@@ -60,192 +64,175 @@ export function BackupSchedulePage() {
   useEffect(load, [filters]);
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return rows;
-    const s = search.toLowerCase();
-    return rows.filter(r =>
-      r.equipment_name.toLowerCase().includes(s) ||
-      r.equipment_code.toLowerCase().includes(s)
+    const s = search.trim().toLowerCase();
+    if (!s) return rows;
+    return rows.filter((r) =>
+      `${r.equipment_code} ${r.equipment_name} ${str(r.computer_system_id)} ${str(r.backup_path)}`.toLowerCase().includes(s),
     );
   }, [rows, search]);
 
-  const openUpdate = (row: BackupScheduleRow) => {
-    const r = row as Record<string, unknown>;
-    setUpdateTarget(row);
-    setUpdateDate(new Date().toISOString().split("T")[0]);
-    setUpdateFreq(String(r.frequency_days ?? 30));
-    setUpdateNotes("");
-    setUpdatePath(String(r.backup_path ?? ""));
-    setCredOpen(true);
+  const openDone = (row: BackupScheduleRow) => {
+    setTarget(row);
+    setForm({ date: today(), freq: str(row.frequency_days ?? 30), path: str(row.backup_path), notes: "" });
   };
 
-  const doUpdate = async (authPassword: string, _reason: string) => {
-    if (!updateTarget) return;
+  const confirmDone = async ({ password }: { password: string; reason: string }) => {
+    if (!target) return;
+    await api.updateBackupDone(target.equipment_code, form.date, parseInt(form.freq) || 30, form.notes || undefined, password, form.path);
     setCredOpen(false);
-    try {
-      await api.updateBackupDone(
-        updateTarget.equipment_code, updateDate,
-        parseInt(updateFreq) || 30,
-        updateNotes, authPassword, updatePath || undefined
-      );
-      showToast("Backup schedule updated.");
-      setUpdateTarget(null);
-      load();
-    } catch (e) {
-      showToast(e instanceof Error ? e.message : "Update failed", "error");
-    }
+    setTarget(null);
+    showToast("Backup schedule updated.");
+    load();
   };
 
   const loadPlanner = async () => {
     setPlannerLoading(true);
     try {
-      const data = await api.getBackupSchedulePlanner(
+      setPlannerRows(await api.getBackupSchedulePlanner(
         parseInt(plannerYear), plannerMonth ? parseInt(plannerMonth) : undefined,
-        filters.type || undefined, filters.department || undefined
-      );
-      setPlannerRows(data);
+        filters.type || undefined, filters.department || undefined,
+      ));
     } catch (e) {
       showToast(e instanceof Error ? e.message : "Planner load failed", "error");
     } finally { setPlannerLoading(false); }
   };
 
-  const handleExportCsv = () => {
-    const headers = ["Code", "System Name", "Type", "Department", "Frequency (days)", "Backup Path", "Updated By"];
-    const csvRows = filtered.map((r) => {
-      const row = r as Record<string, unknown>;
-      return [r.equipment_code, r.equipment_name, String(row.type ?? ""), String(row.department ?? ""), String(row.frequency_days ?? 30), String(row.backup_path ?? ""), String(r.updated_by ?? "")];
-    });
-    downloadCsv(`backup-schedule-${new Date().toISOString().split("T")[0]}.csv`, headers, csvRows);
-    showToast("Exported to CSV.");
+  const plannerPeriod = plannerMonth ? `${MONTHS[parseInt(plannerMonth) - 1]} ${plannerYear}` : plannerYear;
+  const printPlanner = () => {
+    setPlannerOpen(false);
+    setPrintMode("planner");
+    setTimeout(() => { printReport(); setPrintMode("list"); }, 50);
   };
 
-  return (
-    <div className="space-y-6">
-      <PageHeader
-        eyebrow="Operations"
-        title="Backup Schedule"
-        description="Track backup completion for systems with backup enabled. Retired equipment is excluded."
-        actions={
-          <div className="flex gap-2">
-            <Button variant="secondary" onClick={() => { setPlannerOpen(true); loadPlanner(); }}><Calendar size={15} /> Planner</Button>
-            <Button variant="secondary" onClick={printReport}><Printer size={15} /> Print</Button>
-            <Button onClick={handleExportCsv}><Download size={15} /> Export</Button>
-          </div>
-        }
-      />
+  const baseColumns: Column<BackupScheduleRow>[] = [
+    { header: "Code", render: (r) => <span className="font-mono text-xs">{r.equipment_code}</span> },
+    { header: "System Name", render: (r) => <span className="font-semibold">{r.equipment_name}</span> },
+    { header: "Type", render: (r) => r.type ? <Badge>{str(r.type)}</Badge> : <span className="text-slate-400">—</span> },
+    { header: "Department", render: (r) => str(r.department) || "—" },
+    { header: "Computer System ID", render: (r) => str(r.computer_system_id) || "—" },
+    { header: "Frequency", render: (r) => <span className="text-sm text-slate-600">{str(r.frequency_days ?? 30)} days</span> },
+    { header: "Backup Path", render: (r) => r.backup_path ? <span className="font-mono text-xs text-slate-700">{str(r.backup_path)}</span> : <span className="text-slate-400">—</span> },
+  ];
+  const columns: Column<BackupScheduleRow>[] = [
+    ...baseColumns,
+    { header: "Updated by", render: (r) => <span className="text-xs text-slate-500">{r.updated_by || "—"}</span> },
+    ...(canUpdate ? [{
+      header: "",
+      noPrint: true,
+      className: "px-6 py-4",
+      render: (r: BackupScheduleRow) => <Button size="sm" onClick={() => openDone(r)}>Mark done</Button>,
+    }] : []),
+  ];
 
-      {/* Filters */}
-      <div className="surface flex gap-3 p-4 flex-wrap items-center">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search size={15} className="absolute left-3 top-3 text-slate-400" />
-          <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search systems..." className="pl-9" onBlur={() => load()} />
+  return (
+    <PrintReport title={printMode === "planner" ? `Backup Planner – ${plannerPeriod}` : "Backup Schedule Report"}>
+      <div className="space-y-6">
+        <div className="no-print">
+          <PageHeader
+            eyebrow="Operations"
+            title="Backup Schedule"
+            description="Systems with backup enabled. Retired equipment is excluded."
+            actions={
+              <div className="flex flex-wrap gap-2">
+                <Button variant="secondary" onClick={() => { setPlannerOpen(true); void loadPlanner(); }}><Calendar size={15} /> Planner</Button>
+                <Button variant="secondary" onClick={printReport}><Printer size={15} /> Print</Button>
+                <Button onClick={() => downloadCsv(`backup-schedule-${today()}.csv`, CSV_HEADERS, filtered.map(csvRow))}><Download size={15} /> Export</Button>
+              </div>
+            }
+          />
         </div>
-        <Select value={filters.type} onChange={(e) => setFilters({ ...filters, type: e.target.value })}>
-          <option value="">All Types</option>
-          {TYPE_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
-        </Select>
-        <Input value={filters.department} onChange={(e) => setFilters({ ...filters, department: e.target.value })} placeholder="Filter by department..." className="max-w-xs" />
-        <Badge tone="blue">{filtered.length} systems</Badge>
+
+        <div className="no-print surface flex flex-wrap items-center gap-3 p-4">
+          <div className="relative min-w-[200px] flex-1">
+            <Search size={15} className="absolute left-3 top-3 text-slate-400" />
+            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search system, code, path..." className="pl-9" />
+          </div>
+          <Select value={filters.type} onChange={(e) => setFilters({ ...filters, type: e.target.value })} className="max-w-[180px]">
+            <option value="">All types</option>
+            {TYPE_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
+          </Select>
+          <Select value={filters.department} onChange={(e) => setFilters({ ...filters, department: e.target.value })} className="max-w-[200px]">
+            <option value="">All departments</option>
+            {departments.map((d) => <option key={d} value={d}>{d}</option>)}
+          </Select>
+          <Badge tone="blue">{filtered.length} systems</Badge>
+        </div>
+
+        {printMode === "list" ? (
+          <Card>
+            {loading ? (
+              <div className="space-y-3 p-6">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="skeleton h-12" />)}</div>
+            ) : (
+              <DataTable rows={filtered} rowKey={(r) => r.equipment_code} emptyMessage="No systems with backup enabled." columns={columns} />
+            )}
+          </Card>
+        ) : (
+          <DataTable rows={plannerRows} rowKey={(r) => r.equipment_code} emptyMessage="No backups due for the selected period." columns={baseColumns} />
+        )}
       </div>
 
-      <Card>
-        {loading ? (
-          <div className="space-y-3 p-6">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="skeleton h-12" />)}</div>
-        ) : (
-          <DataTable
-            rows={filtered}
-            rowKey={(r) => r.equipment_code}
-            emptyMessage="No systems with backup enabled."
-            columns={([
-              { header: "Code", render: (r) => <span className="font-mono text-xs">{r.equipment_code}</span> },
-              { header: "System Name", render: (r) => <span className="font-semibold">{r.equipment_name}</span> },
-              { header: "Type", render: (r) => { const row = r as Record<string, unknown>; return row.type ? <Badge>{String(row.type)}</Badge> : <span className="text-slate-400">—</span>; } },
-              { header: "Department", render: (r) => { const row = r as Record<string, unknown>; return String(row.department ?? "—"); } },
-              { header: "CS ID", render: (r) => { const row = r as Record<string, unknown>; return String(row.computer_system_id ?? "—"); } },
-              { header: "Frequency", render: (r) => <DueBadge row={r} /> },
-              { header: "Backup Path", render: (r) => { const row = r as Record<string, unknown>; return row.backup_path ? <span className="font-mono text-xs text-slate-700">{String(row.backup_path)}</span> : <span className="text-slate-400">—</span>; } },
-              { header: "Updated by", render: (r) => <span className="text-xs text-slate-500">{r.updated_by ?? "—"}</span> },
-              canUpdate ? {
-                header: "",
-                render: (r) => (
-                  <Button size="sm" onClick={() => openUpdate(r)}>Mark done</Button>
-                ),
-              } : null,
-            ] as (Column<BackupScheduleRow> | null)[]).filter(Boolean) as Column<BackupScheduleRow>[]}
-          />
-        )}
-      </Card>
-
-      {/* Update done inline form */}
-      {credOpen && updateTarget && (
-        <>
-          <div className="surface p-4 space-y-3 border border-slate-200 rounded-xl">
-            <p className="text-sm font-semibold">Mark backup done for: <span className="text-brand-700">{updateTarget.equipment_name}</span></p>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <Field><FieldLabel>Backup Date *</FieldLabel><Input type="date" value={updateDate} onChange={e => setUpdateDate(e.target.value)} /></Field>
-              <Field><FieldLabel>Frequency (days)</FieldLabel><Input type="number" value={updateFreq} onChange={e => setUpdateFreq(e.target.value)} /></Field>
-              <Field><FieldLabel>Backup Path</FieldLabel><Input value={updatePath} onChange={e => setUpdatePath(e.target.value)} placeholder="e.g. D:\Backups\system1" /></Field>
-            </div>
-            <Field><FieldLabel>Notes</FieldLabel><Input value={updateNotes} onChange={e => setUpdateNotes(e.target.value)} placeholder="Optional notes..." /></Field>
+      <Modal
+        open={!!target && !credOpen}
+        title={`Mark backup done — ${target?.equipment_name ?? ""}`}
+        onClose={() => setTarget(null)}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setTarget(null)}>Cancel</Button>
+            <Button onClick={() => { if (!form.date) return showToast("Enter the backup date", "error"); setCredOpen(true); }}>Save</Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field><FieldLabel>Backup Date *</FieldLabel><Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></Field>
+            <Field><FieldLabel>Frequency (days)</FieldLabel><Input type="number" min={1} value={form.freq} onChange={(e) => setForm({ ...form, freq: e.target.value })} /></Field>
           </div>
-          <CredentialsDialog
-            open={credOpen}
-            title="E-Signature: Confirm Backup"
-            requireReason={false}
-            onConfirm={({ password, reason }) => doUpdate(password, reason)}
-            onClose={() => { setCredOpen(false); setUpdateTarget(null); }}
-          />
-        </>
-      )}
+          <Field><FieldLabel>Backup Path / Data Backup Path</FieldLabel><Input value={form.path} onChange={(e) => setForm({ ...form, path: e.target.value })} placeholder="e.g. \\backup-server\HPLC01" /></Field>
+          <Field><FieldLabel>Notes</FieldLabel><Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Optional notes..." /></Field>
+        </div>
+      </Modal>
+      <CredentialsDialog
+        open={credOpen}
+        title="E-Signature: Confirm Backup"
+        description={`Record backup for ${target?.equipment_name ?? ""} on ${formatDate(form.date)}.`}
+        requireReason
+        confirmLabel="Sign & save"
+        onConfirm={confirmDone}
+        onClose={() => setCredOpen(false)}
+      />
 
-      {/* Planner modal */}
       <Modal
         open={plannerOpen}
+        size="lg"
         title="Backup Schedule Planner"
         onClose={() => setPlannerOpen(false)}
         footer={
           <>
             <Button variant="secondary" onClick={() => setPlannerOpen(false)}>Close</Button>
-            <Button onClick={() => downloadCsv(
-              `backup-planner-${plannerYear}${plannerMonth ? `-${plannerMonth}` : ""}.csv`,
-              ["Code", "System Name", "Type", "Dept", "Frequency (days)"],
-              plannerRows.map(r => {
-                const row = r as Record<string, unknown>;
-                return [r.equipment_code, r.equipment_name, String(row.type ?? ""), String(row.department ?? ""), String(row.frequency_days ?? 30)];
-              })
-            )}>
-              <Download size={14} /> Export Planner
+            <Button variant="secondary" onClick={printPlanner}><Printer size={14} /> Print planner</Button>
+            <Button onClick={() => downloadCsv(`backup-planner-${plannerYear}${plannerMonth ? `-${plannerMonth}` : ""}.csv`, CSV_HEADERS, plannerRows.map(csvRow))}>
+              <Download size={14} /> Download
             </Button>
           </>
         }
       >
         <div className="space-y-4">
-          <div className="flex gap-3 items-end">
-            <Field><FieldLabel>Year</FieldLabel><Input type="number" value={plannerYear} onChange={e => setPlannerYear(e.target.value)} className="w-28" /></Field>
+          <div className="flex flex-wrap items-end gap-3">
+            <Field><FieldLabel>Year</FieldLabel><Input type="number" value={plannerYear} onChange={(e) => setPlannerYear(e.target.value)} className="w-28" /></Field>
             <Field>
-              <FieldLabel>Month (optional)</FieldLabel>
-              <Select value={plannerMonth} onChange={e => setPlannerMonth(e.target.value)}>
-                <option value="">All months</option>
-                {Array.from({ length: 12 }, (_, i) => (
-                  <option key={i + 1} value={String(i + 1)}>{new Date(2000, i).toLocaleString("default", { month: "long" })}</option>
-                ))}
+              <FieldLabel>Month</FieldLabel>
+              <Select value={plannerMonth} onChange={(e) => setPlannerMonth(e.target.value)}>
+                <option value="">All months (yearly)</option>
+                {MONTHS.map((m, i) => <option key={m} value={String(i + 1)}>{m}</option>)}
               </Select>
             </Field>
             <Button onClick={loadPlanner}>Load</Button>
           </div>
           {plannerLoading ? <p className="text-sm text-slate-500">Loading...</p> : (
-            <DataTable
-              rows={plannerRows}
-              rowKey={(r) => r.equipment_code}
-              emptyMessage="No backups due for the selected period."
-              columns={[
-                { header: "Code", render: (r) => r.equipment_code },
-                { header: "System Name", render: (r) => r.equipment_name },
-                { header: "Frequency (days)", render: (r) => { const row = r as Record<string, unknown>; return String(row.frequency_days ?? 30); } },
-              ]}
-            />
+            <DataTable rows={plannerRows} rowKey={(r) => r.equipment_code} emptyMessage="No backups due for the selected period." columns={baseColumns} />
           )}
         </div>
       </Modal>
-    </div>
+    </PrintReport>
   );
 }

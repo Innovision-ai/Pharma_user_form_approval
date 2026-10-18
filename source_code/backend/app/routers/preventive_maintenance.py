@@ -23,7 +23,7 @@ from datetime import datetime
 from app.database import get_db, Base
 from app.deps import get_current_user, get_current_plant, verify_current_password
 from app.models import Equipment, PreventiveMaintenanceEntry, User
-from app.audit import log_audit
+from app.audit import diff_and_log, log_audit
 
 router = APIRouter(prefix="/api/preventive-maintenance", tags=["preventive-maintenance"])
 
@@ -218,6 +218,10 @@ def update_done(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    if equipment_code.startswith("ADD-") and equipment_code[4:].isdigit():
+        # Additional (non-equipment) system listed in the PM table
+        return update_additional_system(int(equipment_code[4:]), payload, db, current_user)
+
     # E-signature
     verify_current_password(current_user, payload.get("auth_password"))
 
@@ -259,8 +263,8 @@ def update_done(
         db, current_user, "PM_UPDATED",
         f"PM performed for {eq.name} ({equipment_code})" + (f" — {reason}" if reason else ""),
         entity=equipment_code, field="Last PM Date",
-        old=old_last.isoformat() if old_last else None,
-        new=last_date.isoformat(),
+        old=old_last,
+        new=last_date,
         plant=eq.plant,
     )
 
@@ -288,13 +292,16 @@ def add_additional_system(
     payload: dict,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    token_plant: Optional[str] = Depends(get_current_plant),
 ):
+    if not str(payload.get("system_name") or "").strip():
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "System name is required")
     sys = AdditionalPMSystem(
-        system_name=payload["system_name"],
+        system_name=payload["system_name"].strip(),
         system_id=payload.get("system_id"),
         computer_system_id=payload.get("computer_system_id"),
-        frequency_months=int(payload.get("frequency_months", 6)),
-        plant=payload.get("plant", "P1"),
+        frequency_months=int(payload.get("frequency_months") or 6),
+        plant=token_plant or payload.get("plant") or current_user.plant,
         created_by=current_user.name,
         updated_by=current_user.name,
     )
@@ -324,11 +331,15 @@ def update_additional_system(
     if not sys:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Additional PM system not found")
 
-    old_snap = {"name": sys.system_name, "freq": sys.frequency_months}
-    sys.system_name = payload.get("system_name", sys.system_name)
+    old_snap = {
+        "system_name": sys.system_name, "system_id": sys.system_id,
+        "computer_system_id": sys.computer_system_id, "frequency_months": sys.frequency_months,
+        "last_pm_date": sys.last_pm_date,
+    }
+    sys.system_name = payload.get("system_name") or sys.system_name
     sys.system_id = payload.get("system_id", sys.system_id)
     sys.computer_system_id = payload.get("computer_system_id", sys.computer_system_id)
-    sys.frequency_months = int(payload.get("frequency_months", sys.frequency_months))
+    sys.frequency_months = int(payload.get("frequency_months") or sys.frequency_months)
     sys.updated_by = current_user.name
 
     if "last_pm_date" in payload:
@@ -351,13 +362,21 @@ def update_additional_system(
     db.commit()
     db.refresh(sys)
 
-    log_audit(
-        db, current_user, "PM_ADDITIONAL_UPDATED",
-        f"Additional PM system updated: {sys.system_name}",
-        entity=f"ADD-{sys.id}", field="System Name",
-        old=old_snap["name"], new=sys.system_name,
+    new_snap = {
+        "system_name": sys.system_name, "system_id": sys.system_id,
+        "computer_system_id": sys.computer_system_id, "frequency_months": sys.frequency_months,
+        "last_pm_date": sys.last_pm_date,
+    }
+    changes = diff_and_log(
+        db, current_user, "PM_ADDITIONAL_UPDATED", f"ADD-{sys.id}", old_snap, new_snap,
+        labels={"system_name": "System Name", "system_id": "System ID",
+                "computer_system_id": "Computer System ID", "frequency_months": "Frequency (months)",
+                "last_pm_date": "Last PM Date"},
         plant=sys.plant,
     )
+    if not changes:
+        log_audit(db, current_user, "PM_ADDITIONAL_UPDATED",
+                  f"Additional PM system updated: {sys.system_name}", entity=f"ADD-{sys.id}", plant=sys.plant)
     return _build_additional_row(sys)
 
 

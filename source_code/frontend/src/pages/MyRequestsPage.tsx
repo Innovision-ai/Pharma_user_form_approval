@@ -9,6 +9,7 @@ import { PageHeader } from "../components/ui/PageHeader";
 import { StatusBadge } from "../components/StatusBadge";
 import { Button } from "../components/ui/Button";
 import { EmptyState } from "../components/ui/EmptyState";
+import { formatDate } from "../lib/format";
 
 export function MyRequestsPage() {
   const [items, setItems] = useState<AccessRequest[]>([]);
@@ -26,7 +27,7 @@ export function MyRequestsPage() {
           { header: "Role", render: (r) => r.requested_role },
           { header: "Approvers", render: (r) => <span className="text-xs text-slate-500">{r.hod_name} · {r.qa_name}</span> },
           { header: "Status", render: (r) => <StatusBadge status={r.status} /> },
-          { header: "Submitted", render: (r) => <span className="whitespace-nowrap text-xs text-slate-500">{new Date(r.created_at).toLocaleDateString()}</span> },
+          { header: "Submitted", render: (r) => <span className="whitespace-nowrap text-xs text-slate-500">{formatDate(r.created_at)}</span> },
           { header: "", render: (r) => <Link to={`/requests/${r.request_code}`} className="inline-flex items-center gap-1 text-xs font-semibold text-brand-600 hover:text-brand-700">View <ArrowRight size={13} /></Link> },
         ]} />}
       </Card>

@@ -8,6 +8,7 @@ import { Input, Field, FieldLabel } from "../components/ui/Input";
 import { StatusBadge } from "../components/StatusBadge";
 import { useToast } from "../components/ui/Toast";
 import type { Equipment, EquipmentUser } from "../types";
+import { formatDate, formatDateTime } from "../lib/format";
 
 function InfoRow({ label, value }: { label: string; value?: string | number | boolean | null }) {
   if (value === undefined || value === null || value === "") return null;
@@ -58,10 +59,10 @@ export function EquipmentDetailsPage() {
             <CardHeader className="flex items-start justify-between gap-4">
               <div>
                 <CardTitle>{equipment.name}</CardTitle>
-                <p className="mt-1 text-sm text-slate-500">{equipment.equipment_code} · {equipment.type} · {equipment.location}</p>
+                <p className="mt-1 text-sm text-slate-500">{equipment.equipment_code} · {equipment.type} · Department: {equipment.location}</p>
               </div>
               <div className="flex shrink-0 flex-wrap gap-2">
-                <Badge tone={equipment.active ? "green" : "red"}>{equipment.active ? "Active" : "Inactive"}</Badge>
+                <Badge tone={equipment.active ? "green" : "red"}>{equipment.active ? "Active" : "Retired"}</Badge>
                 <StatusBadge status={equipment.validation_status ?? "under_validation"} />
                 {equipment.gamp_category && <Badge tone="purple">GAMP Cat {equipment.gamp_category}</Badge>}
                 {equipment.backup_include && <Badge tone="blue">Backup included</Badge>}
@@ -70,7 +71,7 @@ export function EquipmentDetailsPage() {
             <CardBody>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <InfoRow label="Plant" value={equipment.plant} />
-                <InfoRow label="Validation date" value={equipment.validation_date} />
+                <InfoRow label="Validation completion date" value={formatDate(equipment.validation_date)} />
                 <InfoRow label="Allowed roles" value={equipment.allowed_roles.join(", ")} />
               </div>
             </CardBody>
@@ -88,11 +89,12 @@ export function EquipmentDetailsPage() {
                 <InfoRow label="Application Name" value={equipment.application_name} />
                 <InfoRow label="GAMP Category" value={equipment.gamp_category} />
                 <InfoRow label="USP Classification" value={equipment.usp_classification} />
-                <InfoRow label="Initial Validation Date" value={equipment.initial_validation_date} />
-                <InfoRow label="Latest Validation Date" value={equipment.latest_validation_date} />
-                <InfoRow label="Periodic Review Frequency" value={equipment.periodic_review_frequency != null ? `${equipment.periodic_review_frequency} months` : undefined} />
+                <InfoRow label="Initial Validation Date" value={equipment.initial_validation_date ? formatDate(equipment.initial_validation_date) : undefined} />
+                <InfoRow label="Latest Validation Date" value={equipment.latest_validation_date ? formatDate(equipment.latest_validation_date) : undefined} />
+                <InfoRow label="Periodic Review Freq." value={equipment.periodic_review_frequency != null ? `${equipment.periodic_review_frequency} months` : undefined} />
                 <InfoRow label="Include in Backup" value={equipment.backup_include} />
                 <InfoRow label="Computer System ID" value={equipment.computer_system_id} />
+                <InfoRow label="Instrument IDs" value={equipment.instrument_ids} />
                 <InfoRow label="Remarks" value={equipment.remarks} />
               </div>
             </CardBody>
@@ -117,7 +119,7 @@ export function EquipmentDetailsPage() {
                 { header: "User ID", render: (u) => u.user_id },
                 { header: "Department", render: (u) => u.department },
                 { header: "Access Granted By", render: (u) => u.access_granted_by },
-                { header: "Granted Date", render: (u) => new Date(u.granted_date).toLocaleString() },
+                { header: "Granted Date", render: (u) => formatDateTime(u.granted_date) },
                 { header: "Status", render: (u) => <Badge tone="green">{u.status}</Badge> },
               ]}
             />

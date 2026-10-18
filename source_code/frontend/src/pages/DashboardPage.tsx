@@ -9,19 +9,20 @@ import { StatusBadge } from "../components/StatusBadge";
 import { MetricCard } from "../components/ui/MetricCard";
 import { PageHeader } from "../components/ui/PageHeader";
 import { EmptyState } from "../components/ui/EmptyState";
+import { formatDate } from "../lib/format";
 
 const GLOBAL_CARDS = [
   { key: "total_equipment", label: "Total Equipment", tone: "blue" as const, icon: FlaskConical, trend: "Across all registered plants" },
   { key: "active_equipment", label: "Active Equipment", tone: "green" as const, icon: CheckCircle2, trend: "Ready for access requests" },
-  { key: "pending_hod", label: "Pending HOD", tone: "amber" as const, icon: Hourglass, trend: "Awaiting review" },
-  { key: "pending_qa", label: "Pending QA", tone: "purple" as const, icon: ShieldCheck, trend: "Quality review queue" },
+  { key: "pending_hod", label: "Pending Reviewer", tone: "amber" as const, icon: Hourglass, trend: "Awaiting review" },
+  { key: "pending_qa", label: "Pending QA Approver", tone: "purple" as const, icon: ShieldCheck, trend: "Quality review queue" },
   { key: "it_pending", label: "Pending IT", tone: "blue" as const, icon: Activity, trend: "Ready for provisioning" },
   { key: "approved_requests", label: "Access Completed", tone: "green" as const, icon: ClipboardCheck, trend: "Successfully provisioned" },
 ];
 
 const MY_CARDS = [
-  { key: "user_total_requests", label: "My Requests", tone: "blue" as const, icon: ClipboardCheck, trend: "Total submitted requests" },
-  { key: "user_uam_requests", label: "My UAM Requests", tone: "purple" as const, icon: Shield, trend: "User access management" },
+  { key: "user_total_requests", label: "Legacy Access Requests", tone: "blue" as const, icon: ClipboardCheck, trend: "Earlier access workflow" },
+  { key: "user_uam_requests", label: "My Requests", tone: "purple" as const, icon: Shield, trend: "User access requests" },
   { key: "user_equipment_count", label: "My Equipment", tone: "green" as const, icon: FlaskConical, trend: "Active equipment access" },
   { key: "user_pending_actions", label: "Pending actions", tone: "amber" as const, icon: User, trend: "Assigned to me" },
 ];
@@ -83,22 +84,22 @@ export function DashboardPage() {
             <CardTitle>Recent requests</CardTitle>
             <p className="mt-1 text-xs text-slate-500">Latest activity across the access workflow</p>
           </div>
-          <Link to="/requests/mine" className="text-xs font-semibold text-brand-600 hover:text-brand-700">View all requests →</Link>
+          <Link to="/uam/requests" className="text-xs font-semibold text-brand-600 hover:text-brand-700">View all requests →</Link>
         </CardHeader>
-        {summary.recent_requests.length === 0 ? (
-          <EmptyState title="No recent requests" description="New access requests will appear here." />
+        {(summary.recent_uam_requests ?? []).length === 0 ? (
+          <EmptyState title="No recent requests" description="New requests will appear here." />
         ) : (
           <DataTable
-            rows={summary.recent_requests}
+            rows={summary.recent_uam_requests}
             rowKey={(r) => r.request_code}
             columns={[
-              { header: "Request", render: (r) => <Link to={`/requests/${r.request_code}`} className="font-semibold text-brand-600 hover:text-brand-700">{r.request_code}</Link> },
-              { header: "Employee", render: (r) => <div><p className="font-medium text-slate-800">{r.employee_name}</p><p className="text-xs text-slate-400">{r.employee_department}</p></div> },
-              { header: "Equipment", render: (r) => r.equipment_name },
+              { header: "Request", render: (r) => <Link to={`/uam/requests/${r.request_code}`} className="font-semibold text-brand-600 hover:text-brand-700">{r.request_code}</Link> },
+              { header: "Initiator", render: (r) => <span className="font-medium text-slate-800">{r.employee_name}</span> },
+              { header: "Asset", render: (r) => <span>{r.asset_code}{typeof r.form_data?.asset_name === "string" ? ` · ${r.form_data.asset_name}` : ""}</span> },
+              { header: "Action", render: (r) => r.action },
               { header: "Requested role", render: (r) => r.requested_role },
-              { header: "HOD / QA", render: (r) => <span className="text-xs text-slate-500">{r.hod_name} · {r.qa_name}</span> },
               { header: "Status", render: (r) => <StatusBadge status={r.status} /> },
-              { header: "Created", render: (r) => <span className="whitespace-nowrap text-xs text-slate-500">{new Date(r.created_at).toLocaleDateString()}</span> },
+              { header: "Created", render: (r) => <span className="whitespace-nowrap text-xs text-slate-500">{formatDate(r.created_at)}</span> },
             ]}
           />
         )}

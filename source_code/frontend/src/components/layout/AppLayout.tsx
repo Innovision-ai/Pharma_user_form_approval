@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ChangePasswordDialog } from "../ChangePasswordDialog";
 import { Menu } from "lucide-react";
 import { Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
@@ -9,6 +10,7 @@ export function AppLayout() {
   const { currentUser, loading } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [pwOpen, setPwOpen] = useState(false);
 
   if (loading) {
     return (
@@ -37,6 +39,12 @@ export function AppLayout() {
           <Topbar onMenu={() => setSidebarOpen(true)} />
           <main className="flex-1 overflow-y-auto">
             <div className="page-enter mx-auto w-full max-w-[1600px] p-4 sm:p-6 lg:p-8">
+              {currentUser.password_expired && (
+                <div className="no-print mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  <span><strong>Your password has expired.</strong> Please change it now.</span>
+                  <button type="button" onClick={() => setPwOpen(true)} className="font-semibold underline">Change password</button>
+                </div>
+              )}
               <Outlet />
             </div>
           </main>
@@ -50,6 +58,7 @@ export function AppLayout() {
       >
         <Menu size={22} />
       </button>
+      <ChangePasswordDialog open={pwOpen} onClose={() => setPwOpen(false)} />
     </div>
   );
 }

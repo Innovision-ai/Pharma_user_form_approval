@@ -14,8 +14,6 @@ import {
   LayoutDashboard,
   PanelLeftClose,
   PanelLeftOpen,
-  Settings2,
-  ShieldCheck,
   Users,
   Wrench,
   X,
@@ -25,24 +23,20 @@ import { cn } from "../../lib/cn";
 import type { Role } from "../../types";
 
 type Icon = typeof Gauge;
-interface NavItem { to: string; label: string; icon: Icon; roles?: Role[] }
+export interface NavItem { to: string; label: string; icon: Icon; roles?: Role[] }
 
-const NAV_ITEMS: NavItem[] = [
+/** Left menu, in the order agreed with the client (testing sheet). */
+export const NAV_ITEMS: NavItem[] = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/equipment", label: "Equipment Master", icon: FlaskConical, roles: ["ADMIN"] },
-  { to: "/approvers", label: "Approver Master", icon: ShieldCheck, roles: ["ADMIN"] },
-  { to: "/users", label: "User Management", icon: Users, roles: ["ADMIN"] },
-  { to: "/inventory", label: "Inventory Report", icon: ClipboardList, roles: ["ADMIN"] },
-  { to: "/requests/new", label: "Create Request", icon: ClipboardCheck, roles: ["EMPLOYEE"] },
-  { to: "/requests/mine", label: "My Requests", icon: FileClock, roles: ["EMPLOYEE"] },
-  { to: "/approvals", label: "Approvals", icon: ShieldCheck, roles: ["HOD", "QA"] },
-  { to: "/it-queue", label: "IT Requests", icon: Settings2, roles: ["IT"] },
-  { to: "/uam/requests", label: "UAM Requests", icon: ClipboardCheck },
   { to: "/asset-requests", label: "Asset Requests", icon: Database },
-  { to: "/periodic-review", label: "Periodic Review", icon: Calendar, roles: ["IT", "ADMIN"] },
-  { to: "/backup-schedule", label: "Backup Schedule", icon: HardDrive, roles: ["IT", "ADMIN"] },
-  { to: "/preventive-maintenance", label: "Preventive Maint.", icon: Wrench, roles: ["IT", "ADMIN"] },
+  { to: "/inventory", label: "Inventory Report", icon: ClipboardList, roles: ["ADMIN"] },
+  { to: "/uam/requests", label: "Requests", icon: ClipboardCheck },
+  { to: "/periodic-review", label: "Periodic Review Management", icon: Calendar, roles: ["IT", "ADMIN"] },
+  { to: "/preventive-maintenance", label: "Preventive Maintenance Management", icon: Wrench, roles: ["IT", "ADMIN"] },
+  { to: "/backup-schedule", label: "Backup Schedule Management", icon: HardDrive, roles: ["IT", "ADMIN"] },
   { to: "/vault", label: "Password Vault", icon: Key },
+  { to: "/users", label: "User Management", icon: Users, roles: ["ADMIN"] },
   { to: "/audit", label: "Audit Trail", icon: FileClock },
   { to: "/notifications", label: "Notifications", icon: Bell },
 ];
@@ -97,8 +91,8 @@ export function Sidebar({ collapsed, mobileOpen, onClose, onToggle }: SidebarPro
                 ? "bg-gradient-to-r from-brand-600 to-indigo-600 text-white shadow-lg shadow-brand-600/30"
                 : "text-slate-500 hover:bg-slate-100/80 hover:text-slate-900",
             )}>
-              <Icon size={18} strokeWidth={1.8} />
-              {!collapsed && <span>{label}</span>}
+              <Icon size={18} strokeWidth={1.8} className="shrink-0" />
+              {!collapsed && <span className="leading-tight">{label}</span>}
               {label === "Notifications" && !collapsed && <span className="ml-auto flex h-2 w-2 rounded-full bg-brand-400 ring-2 ring-brand-200" />}
             </NavLink>
           ))}

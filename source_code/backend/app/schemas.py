@@ -47,6 +47,22 @@ class UserCreate(BaseModel):
     auth_source: Optional[str] = Field(default="LOCAL", max_length=20)
 
 
+class UserImportRow(BaseModel):
+    """One user fetched from Active Directory / ERP (CSV export for now)."""
+    employee_id: str = Field(min_length=1, max_length=20)
+    name: str = Field(min_length=1, max_length=120)
+    email: EmailStr
+    department: str = Field(min_length=1, max_length=80)
+    plant: str = Field(default="P1", max_length=20)
+    plants: list[str] = Field(default_factory=list)
+    role: str = Field(default="EMPLOYEE", pattern="^(EMPLOYEE|HOD|QA|ADMIN|IT|INVENTORY_REQUESTOR)$")
+    password: Optional[str] = Field(default=None, max_length=100)
+
+
+class UserImportRequest(BaseModel):
+    users: list[UserImportRow] = Field(min_length=1, max_length=500)
+
+
 class UserUpdate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     email: EmailStr
@@ -267,9 +283,9 @@ class NotificationOut(BaseModel):
 # ---------- UAM ----------
 
 class UAMRequestCreate(BaseModel):
-    template: str = Field(pattern="^(MANUFACTURING|QC|ERP)$")
-    asset_type: str = Field(pattern="^(EQUIPMENT|SOFTWARE)$")
-    asset_code: str
+    template: str = Field(pattern="^(MANUFACTURING|QC|ERP|FOLDER_PROJECT)$")
+    asset_type: str = Field(pattern="^(EQUIPMENT|SOFTWARE|FOLDER)$")
+    asset_code: str = Field(min_length=1, max_length=40)
     requested_role: str
     action: str = Field(pattern="^(CREATE|MODIFY|DEACTIVATE|ACTIVATE|UNLOCK|CHANGE_PASSWORD)$")
     reason: str = Field(min_length=1, max_length=2000)
@@ -279,12 +295,19 @@ class UAMRequestCreate(BaseModel):
     it_executor_id: Optional[str] = None
     plant: str = "P1"
     form_data: dict = Field(default_factory=dict)
+    # E-signature: the initiator's own password + reason, verified on submit
+    auth_password: Optional[str] = Field(default=None, max_length=100)
+    auth_reason: Optional[str] = Field(default=None, max_length=2000)
 
 
 class UAMAction(BaseModel):
     comment: Optional[str] = Field(default=None, max_length=2000)
+    # Credentials the IT executor creates on the target system (execute step)
     user_login_id: Optional[str] = Field(default=None, max_length=100)
     password: Optional[str] = Field(default=None, max_length=100)
+    # E-signature of the user performing the action
+    auth_password: Optional[str] = Field(default=None, max_length=100)
+    auth_reason: Optional[str] = Field(default=None, max_length=2000)
 
 
 class PlantOut(BaseModel):
@@ -314,6 +337,7 @@ class UAMRequestOut(BaseModel):
     qa_approver_id: Optional[str] = None
     it_executor_id: Optional[str] = None
     rejection_reason: Optional[str] = None
+    auth_reason: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -341,6 +365,8 @@ class AssetCreationRequestCreate(BaseModel):
     it_executor_id: Optional[str] = None
     qa_approver_id: Optional[str] = None
     plant: str = "P1"
+    request_type: str = Field(default="CREATE", pattern="^(CREATE|RETIRE)$")
+    equipment_code: Optional[str] = None
     form_data: dict = Field(default_factory=dict)
 
 
@@ -376,6 +402,8 @@ class AssetCreationRequestOut(BaseModel):
     it_executor_id: Optional[str] = None
     qa_approver_id: Optional[str] = None
     plant: str
+    request_type: Optional[str] = "CREATE"
+    equipment_code: Optional[str] = None
     status: str
     rejection_reason: Optional[str] = None
     form_data: dict = Field(default_factory=dict)
@@ -508,6 +536,7 @@ class DashboardSummary(BaseModel):
     user_equipment_count: int = 0
     user_pending_actions: int = 0
     validation_alerts: int = 0
+    recent_uam_requests: list[UAMRequestOut] = Field(default_factory=list)
 
 
 # ---------- Bulk Deactivation ----------

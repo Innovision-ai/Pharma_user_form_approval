@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#eef2ff"/>
+      <stop offset="0.55" stop-color="#e0f2fe"/>
+      <stop offset="1" stop-color="#ecfdf5"/>
+    </linearGradient>
+    <pattern id="hex" width="56" height="97" patternUnits="userSpaceOnUse" patternTransform="scale(1.1)">
+      <path d="M28 0 L56 16 L56 48 L28 64 L0 48 L0 16 Z M28 64 L28 97" fill="none" stroke="#6366f1" stroke-opacity="0.07" stroke-width="1.2"/>
+    </pattern>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#818cf8" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#818cf8" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1600" height="1000" fill="url(#bg)"/>
+  <rect width="1600" height="1000" fill="url(#hex)"/>
+  <circle cx="1350" cy="180" r="320" fill="url(#glow)"/>
+  <circle cx="220" cy="860" r="300" fill="url(#glow)"/>
+
+  <!-- molecule, top left -->
+  <g stroke="#4f46e5" stroke-opacity="0.28" stroke-width="3" fill="none">
+    <path d="M140 170 L230 120 L320 170 L320 270 L230 320 L140 270 Z"/>
+    <path d="M320 170 L410 120 M320 270 L410 320 M230 120 L230 40 M140 270 L60 320"/>
+  </g>
+  <g fill="#4f46e5" fill-opacity="0.32">
+    <circle cx="140" cy="170" r="11"/><circle cx="230" cy="120" r="11"/><circle cx="320" cy="170" r="11"/>
+    <circle cx="320" cy="270" r="11"/><circle cx="230" cy="320" r="11"/><circle cx="140" cy="270" r="11"/>
+    <circle cx="410" cy="120" r="8"/><circle cx="410" cy="320" r="8"/><circle cx="230" cy="40" r="8"/><circle cx="60" cy="320" r="8"/>
+  </g>
+
+  <!-- flask, right -->
+  <g transform="translate(1230 560)" stroke="#0ea5e9" stroke-opacity="0.35" stroke-width="4" fill="none" stroke-linejoin="round">
+    <path d="M60 0 H140 M75 0 V110 L0 260 Q-8 290 25 290 H175 Q208 290 200 260 L125 110 V0"/>
+    <path d="M28 220 H172" stroke-opacity="0.25"/>
+  </g>
+  <path transform="translate(1230 560)" d="M28 220 H172 L200 260 Q208 290 175 290 H25 Q-8 290 0 260 Z" fill="#0ea5e9" fill-opacity="0.12"/>
+  <g fill="#0ea5e9" fill-opacity="0.3"><circle cx="1320" cy="760" r="9"/><circle cx="1350" cy="730" r="6"/><circle cx="1300" cy="715" r="5"/></g>
+
+  <!-- capsule, bottom centre-left -->
+  <g transform="translate(520 800) rotate(-28)">
+    <rect x="0" y="0" width="190" height="70" rx="35" fill="#10b981" fill-opacity="0.14" stroke="#10b981" stroke-opacity="0.35" stroke-width="3"/>
+    <path d="M95 0 V70" stroke="#10b981" stroke-opacity="0.35" stroke-width="3"/>
+    <path d="M35 0 H95 V70 H35 A35 35 0 0 1 35 0 Z" fill="#10b981" fill-opacity="0.18"/>
+  </g>
+
+  <!-- molecule, right top -->
+  <g stroke="#6366f1" stroke-opacity="0.22" stroke-width="2.5" fill="none">
+    <path d="M1080 120 L1150 80 L1220 120 L1220 200 L1150 240 L1080 200 Z M1220 200 L1290 240 L1290 320"/>
+  </g>
+  <g fill="#6366f1" fill-opacity="0.26">
+    <circle cx="1080" cy="120" r="8"/><circle cx="1150" cy="80" r="8"/><circle cx="1220" cy="120" r="8"/>
+    <circle cx="1220" cy="200" r="8"/><circle cx="1150" cy="240" r="8"/><circle cx="1080" cy="200" r="8"/>
+    <circle cx="1290" cy="240" r="7"/><circle cx="1290" cy="320" r="7"/>
+  </g>
+
+  <!-- ECG / quality line -->
+  <path d="M0 640 H360 L390 590 L420 690 L450 560 L480 640 H760" fill="none" stroke="#4f46e5" stroke-opacity="0.16" stroke-width="3"/>
+</svg>

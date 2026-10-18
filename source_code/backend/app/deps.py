@@ -9,6 +9,8 @@ from app.models import User
 from app.auth import SECRET_KEY, ALGORITHM
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+# Same scheme but returns None instead of 401 when no token is sent.
+optional_oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 
 def get_current_user(
     token: str = Depends(oauth2_scheme),
@@ -51,6 +53,19 @@ def get_current_plant(
     token: str = Depends(oauth2_scheme),
 ) -> Optional[str]:
     """Plant selected at login (stored in the JWT). None = no plant scoping (legacy tokens)."""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError:
+        return None
+    return payload.get("plant") or None
+
+
+def get_optional_plant(
+    token: Optional[str] = Depends(optional_oauth2_scheme),
+) -> Optional[str]:
+    """Like get_current_plant, for endpoints that do not require a login."""
+    if not token:
+        return None
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
     except JWTError:

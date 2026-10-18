@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search } from "lucide-react";
+import { Search, Upload, UserMinus, Unlock, Pencil, Power } from "lucide-react";
 import { api } from "../lib/api";
 import type { User } from "../types";
 import { Card } from "../components/ui/Card";
@@ -11,17 +11,40 @@ import { Field, FieldLabel, Input, Select, Textarea } from "../components/ui/Inp
 import { useToast } from "../components/ui/Toast";
 import { PageHeader } from "../components/ui/PageHeader";
 import { ConfirmDialog } from "../components/ui/ConfirmDialog";
+import { ROLE_LABELS } from "../lib/roles";
 
-const ROLE_OPTIONS = ["EMPLOYEE", "HOD", "QA", "ADMIN", "IT", "INVENTORY_REQUESTOR"];
-const ROLE_LABELS: Record<string, string> = {
-  EMPLOYEE: "Initiator",
-  HOD: "Reviewer",
-  QA: "QA Approver",
-  ADMIN: "IT Executor",
-  IT: "IT Support",
-  INVENTORY_REQUESTOR: "Inventory Requestor",
-};
+// "IT" is no longer assignable (sheet: IT -> remove; Admin is the IT Executor).
+// Existing IT users keep working and keep their role when edited.
+const ROLE_OPTIONS = ["EMPLOYEE", "HOD", "QA", "ADMIN", "INVENTORY_REQUESTOR"];
+const FILTER_ROLE_OPTIONS = [...ROLE_OPTIONS, "IT"];
 const PLANT_OPTIONS = ["P1", "P2", "P3"];
+const IMPORT_HEADERS = ["username", "name", "email", "department", "plant", "role", "password"];
+
+/** Parse the AD / ERP CSV export: header row + one user per line. */
+function parseImportCsv(textValue: string) {
+  const lines = textValue.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (lines.length < 2) throw new Error("Paste a header row and at least one user.");
+  const header = lines[0].split(",").map((h) => h.trim().toLowerCase());
+  const idx = (k: string) => header.indexOf(k);
+  if (idx("username") < 0 || idx("name") < 0 || idx("email") < 0 || idx("department") < 0) {
+    throw new Error(`Header must include: ${IMPORT_HEADERS.join(", ")}`);
+  }
+  const roleCodes: Record<string, string> = Object.fromEntries(
+    Object.entries(ROLE_LABELS).flatMap(([code, label]) => [[code.toLowerCase(), code], [label.toLowerCase(), code]]),
+  );
+  return lines.slice(1).map((line, i) => {
+    const cols = line.split(",").map((c) => c.trim());
+    const get = (k: string) => (idx(k) >= 0 ? cols[idx(k)] ?? "" : "");
+    const role = roleCodes[get("role").toLowerCase()] ?? "EMPLOYEE";
+    const plants = get("plant").split(/[;|]/).map((p) => p.trim()).filter(Boolean);
+    if (!get("username") || !get("name") || !get("email")) throw new Error(`Line ${i + 2}: username, name and email are required.`);
+    return {
+      employee_id: get("username"), name: get("name"), email: get("email"),
+      department: get("department") || "General", plant: plants[0] ?? "P1", plants,
+      role, password: get("password") || undefined,
+    };
+  });
+}
 
 interface FormState {
   employee_id: string;
@@ -65,6 +88,14 @@ export function UserManagementPage() {
   const [bulkItUser, setBulkItUser] = useState("IT001");
   const [bulkBusy, setBulkBusy] = useState(false);
 
+  const [departments, setDepartments] = useState<string[]>([]);
+
+  // AD / ERP import
+  const [importOpen, setImportOpen] = useState(false);
+  const [importText, setImportText] = useState("");
+  const [importBusy, setImportBusy] = useState(false);
+  const [importResult, setImportResult] = useState<string | null>(null);
+
   const load = () => {
     setLoading(true);
     api.listUsers({
@@ -78,6 +109,34 @@ export function UserManagementPage() {
   };
 
   useEffect(load, [filters]);
+
+  // Department list depends on the plant chosen first
+  useEffect(() => {
+    if (!modalOpen) return;
+    api.getDepartments(form.plant).then((d) => setDepartments(d.departments)).catch(() => setDepartments([]));
+  }, [modalOpen, form.plant]);
+
+  const handleImport = async () => {
+    let rows;
+    try { rows = parseImportCsv(importText); } catch (err) { setImportResult(err instanceof Error ? err.message : "Invalid file"); return; }
+    setImportBusy(true); setImportResult(null);
+    try {
+      const res = await api.importUsers(rows);
+      setImportResult(
+        `Imported ${res.created.length} user(s)` +
+        (res.skipped.length ? `; skipped existing: ${res.skipped.join(", ")}` : "") +
+        (res.errors.length ? `; errors: ${res.errors.join(" | ")}` : ""),
+      );
+      if (res.created.length) load();
+    } catch (err) {
+      setImportResult(err instanceof Error ? err.message : "Import failed");
+    } finally { setImportBusy(false); }
+  };
+
+  const handleUnlock = async (user: User) => {
+    try { await api.unlockUser(user.employee_id); showToast(`${user.employee_id} unlocked.`); load(); }
+    catch (err) { showToast(err instanceof Error ? err.message : "Unlock failed", "error"); }
+  };
 
   // Client-side search on name/id/email/dept
   const filtered = useMemo(() => {
@@ -170,8 +229,13 @@ export function UserManagementPage() {
       <PageHeader
         eyebrow="Administration"
         title="User Management"
-        description={`${items.length} total user${items.length !== 1 ? "s" : ""} registered.`}
-        actions={<Button onClick={openCreate}>+ Add User</Button>}
+        description={`Total users: ${items.length}`}
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" onClick={() => { setImportText(""); setImportResult(null); setImportOpen(true); }}><Upload size={15} /> Import from AD / ERP</Button>
+            <Button onClick={openCreate}>+ Add local user</Button>
+          </div>
+        }
       />
 
       <div className="surface flex flex-col gap-3 p-4 sm:flex-row sm:items-center flex-wrap">
@@ -181,7 +245,7 @@ export function UserManagementPage() {
         </div>
         <Select value={filters.role} onChange={(e) => setFilters({ ...filters, role: e.target.value })}>
           <option value="">All Roles</option>
-          {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{ROLE_LABELS[r] ?? r}</option>)}
+          {FILTER_ROLE_OPTIONS.map((r) => <option key={r} value={r}>{ROLE_LABELS[r] ?? r}</option>)}
         </Select>
         <Select value={filters.plant} onChange={(e) => setFilters({ ...filters, plant: e.target.value })}>
           <option value="">All Plants</option>
@@ -195,20 +259,61 @@ export function UserManagementPage() {
         <Badge tone="blue">{filtered.length} shown</Badge>
       </div>
 
-      {bulkTarget && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 space-y-3">
-          <p className="font-semibold text-red-800">Bulk deactivation for <span className="font-mono">{bulkTarget.employee_id}</span> — {bulkTarget.name}</p>
-          <p className="text-sm text-red-700">This will create DEACTIVATE UAM requests for all active access this user holds.</p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field><FieldLabel>IT executor ID</FieldLabel><Input value={bulkItUser} onChange={e => setBulkItUser(e.target.value)} /></Field>
-            <Field><FieldLabel>Reason *</FieldLabel><Textarea rows={2} value={bulkReason} onChange={e => setBulkReason(e.target.value)} placeholder="Reason for bulk deactivation..." /></Field>
-          </div>
-          <div className="flex gap-2 justify-end">
+      <Modal
+        open={!!bulkTarget}
+        title={`Bulk deactivation — ${bulkTarget?.employee_id ?? ""}`}
+        onClose={() => setBulkTarget(null)}
+        footer={
+          <>
             <Button variant="secondary" onClick={() => setBulkTarget(null)}>Cancel</Button>
-            <Button variant="danger" disabled={bulkBusy} onClick={handleBulkDeactivate}>{bulkBusy ? "Processing..." : "Request bulk deactivation"}</Button>
-          </div>
+            <Button variant="danger" disabled={bulkBusy} onClick={handleBulkDeactivate}>{bulkBusy ? "Processing..." : "Raise deactivation requests"}</Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600">
+            Raises a DEACTIVATE request for every system <strong>{bulkTarget?.name}</strong> has access to. Each request goes through the normal review.
+          </p>
+          <Field>
+            <FieldLabel>IT executor</FieldLabel>
+            <Select value={bulkItUser} onChange={(e) => setBulkItUser(e.target.value)}>
+              {items.filter((u) => u.active && (u.role === "ADMIN" || u.role === "IT")).map((u) => (
+                <option key={u.employee_id} value={u.employee_id}>{u.name} ({u.employee_id})</option>
+              ))}
+            </Select>
+          </Field>
+          <Field><FieldLabel>Reason *</FieldLabel><Textarea rows={3} value={bulkReason} onChange={(e) => setBulkReason(e.target.value)} placeholder="e.g. Employee left the organisation" /></Field>
         </div>
-      )}
+      </Modal>
+
+      <Modal
+        open={importOpen}
+        size="lg"
+        title="Import users from Active Directory / ERP"
+        onClose={() => setImportOpen(false)}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setImportOpen(false)}>Close</Button>
+            <Button disabled={importBusy || !importText.trim()} onClick={handleImport}>{importBusy ? "Importing..." : "Import users"}</Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600">
+            Export the users from AD / ERP as CSV and paste or upload it. Header: <code className="rounded bg-slate-100 px-1 text-xs">{IMPORT_HEADERS.join(",")}</code>.
+            Several plants can be separated with ";". Roles accept the code or the label (Initiator, Reviewer, QA Approver, IT Executor, Inventory Requestor).
+            Existing usernames are skipped.
+          </p>
+          <input
+            type="file"
+            accept=".csv,text/csv"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) f.text().then(setImportText); }}
+            className="block text-sm"
+          />
+          <Textarea rows={8} value={importText} onChange={(e) => setImportText(e.target.value)} placeholder={`${IMPORT_HEADERS.join(",")}\nEMP050,Ravi Kumar,ravi@company.com,QC,P1,Initiator,Welcome@123`} className="font-mono text-xs" />
+          {importResult && <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">{importResult}</p>}
+        </div>
+      </Modal>
 
       <Card>
         {loading ? (
@@ -218,21 +323,35 @@ export function UserManagementPage() {
             rows={filtered}
             rowKey={(u) => u.employee_id}
             columns={[
-              { header: "Employee ID", render: (u) => <span className="font-medium">{u.employee_id}</span> },
+              { header: "Username", render: (u) => <span className="font-medium">{u.employee_id}</span> },
               { header: "Name", render: (u) => u.name },
               { header: "Department", render: (u) => u.department },
               { header: "Plant", render: (u) => <div className="flex flex-wrap gap-1">{(u.plants?.length ? u.plants : [u.plant]).map(p => <Badge key={p}>{p}</Badge>)}</div> },
               { header: "Role", render: (u) => <Badge tone="blue">{ROLE_LABELS[u.role] ?? u.role}</Badge> },
-              { header: "Status", render: (u) => <Badge tone={u.active ? "green" : "red"}>{u.active ? "Active" : "Inactive"}</Badge> },
+              { header: "Source", render: (u) => <span className="text-xs text-slate-500">{u.auth_source === "DIRECTORY" ? "AD / ERP" : "Local"}</span> },
               {
-                header: "",
+                header: "Status",
                 render: (u) => (
-                  <div className="flex flex-wrap gap-2">
-                    <Button variant="secondary" size="sm" onClick={() => openEdit(u)}>Edit</Button>
-                    <Button variant={u.active ? "danger" : "secondary"} size="sm" onClick={() => handleToggleStatus(u)}>
-                      {u.active ? "Deactivate" : "Activate"}
+                  <div className="flex flex-wrap gap-1">
+                    <Badge tone={u.active ? "green" : "red"}>{u.active ? "Active" : "Inactive"}</Badge>
+                    {u.locked && <Badge tone="amber">Locked</Badge>}
+                  </div>
+                ),
+              },
+              {
+                header: "Actions",
+                render: (u) => (
+                  <div className="flex items-center gap-1.5">
+                    <Button variant="secondary" size="sm" onClick={() => openEdit(u)} title="Edit user"><Pencil size={13} /> Edit</Button>
+                    <Button variant="secondary" size="sm" onClick={() => handleToggleStatus(u)} title={u.active ? "Deactivate user" : "Activate user"}>
+                      <Power size={13} /> {u.active ? "Deactivate" : "Activate"}
                     </Button>
-                    <Button variant="danger" size="sm" onClick={() => { setBulkTarget(u); setBulkReason(""); }}>Bulk deactivate</Button>
+                    {u.locked && (
+                      <Button variant="secondary" size="sm" onClick={() => handleUnlock(u)} title="Unlock account"><Unlock size={13} /></Button>
+                    )}
+                    <Button variant="ghost" size="sm" onClick={() => { setBulkTarget(u); setBulkReason(""); }} title="Raise deactivation requests for all of this user's access" className="text-red-600 hover:bg-red-50 hover:text-red-700">
+                      <UserMinus size={14} />
+                    </Button>
                   </div>
                 ),
               },
@@ -267,7 +386,7 @@ export function UserManagementPage() {
       >
         <div className="space-y-4">
           <Field>
-            <FieldLabel>Employee ID *</FieldLabel>
+            <FieldLabel>Username *</FieldLabel>
             <Input value={form.employee_id} disabled={!!editingId} readOnly={!!editingId} onChange={(e) => setForm({ ...form, employee_id: e.target.value })} />
           </Field>
           <Field>
@@ -279,13 +398,17 @@ export function UserManagementPage() {
             <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
           </Field>
           <Field>
-            <FieldLabel>Department *</FieldLabel>
-            <Input value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} />
+            <FieldLabel>Primary plant *</FieldLabel>
+            <Select value={form.plant} onChange={(e) => setForm({ ...form, plant: e.target.value, department: "" })}>
+              {PLANT_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
+            </Select>
           </Field>
           <Field>
-            <FieldLabel>Primary plant</FieldLabel>
-            <Select value={form.plant} onChange={(e) => setForm({ ...form, plant: e.target.value })}>
-              {PLANT_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
+            <FieldLabel>Department *</FieldLabel>
+            <Select value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })}>
+              <option value="">Select department</option>
+              {form.department && !departments.includes(form.department) && <option value={form.department}>{form.department}</option>}
+              {departments.map((d) => <option key={d} value={d}>{d}</option>)}
             </Select>
           </Field>
           <Field>
@@ -302,7 +425,7 @@ export function UserManagementPage() {
           <Field>
             <FieldLabel>Role</FieldLabel>
             <Select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-              {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{ROLE_LABELS[r] ?? r} ({r})</option>)}
+              {(form.role === "IT" ? [...ROLE_OPTIONS, "IT"] : ROLE_OPTIONS).map((r) => <option key={r} value={r}>{ROLE_LABELS[r] ?? r}</option>)}
             </Select>
           </Field>
           {!editingId && (
@@ -312,7 +435,7 @@ export function UserManagementPage() {
                 type="password"
                 value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
-                placeholder="Set a password for this user (optional)"
+                placeholder="Set the user's initial password"
                 autoComplete="new-password"
               />
               <p className="mt-1 text-xs text-slate-500">Min 8 chars, must include uppercase, lowercase, digit and special char.</p>

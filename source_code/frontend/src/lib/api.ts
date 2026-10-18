@@ -9,12 +9,17 @@ import type {
   Notification,
   PeriodicReviewRow,
   PMRow,
+  UAMEquipmentOption,
+  UAMSelectors,
   User,
   ValidationAlert,
   VaultEntry,
 } from "../types";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+
+/** E-signature sent with workflow actions. */
+export interface ESign { auth_password: string; auth_reason: string }
 
 export class ApiError extends Error {
   status: number;
@@ -97,13 +102,18 @@ export const api = {
     request<{ plants: Record<string, string[]>; departments: string[] }>(`/api/meta/departments${plant ? `?plant=${encodeURIComponent(plant)}` : ""}`),
 
   // Users
-  listUsers: (params?: { role?: string; plant?: string; active?: boolean }) => {
+  listUsers: (params?: { role?: string; plant?: string; active?: boolean; search?: string }) => {
     const qs = new URLSearchParams();
     if (params?.role) qs.set("role", params.role);
     if (params?.plant) qs.set("plant", params.plant);
     if (params?.active !== undefined) qs.set("active", String(params.active));
+    if (params?.search) qs.set("search", params.search);
     return request<User[]>(`/api/users?${qs.toString()}`);
   },
+  importUsers: (users: Array<{ employee_id: string; name: string; email: string; department: string; plant: string; plants?: string[]; role: string; password?: string }>) =>
+    request<{ created: string[]; skipped: string[]; errors: string[] }>("/api/users/import", { method: "POST", body: JSON.stringify({ users }) }),
+  unlockUser: (employee_id: string) =>
+    request<{ employee_id: string; locked: boolean }>(`/api/users/${employee_id}/unlock`, { method: "POST" }),
   createUser: (payload: {
     employee_id: string; name: string; email: string; department: string;
     plant: string; plants?: string[]; role: string; active?: boolean; password?: string;
@@ -180,10 +190,11 @@ export const api = {
     return request<Notification[]>(`/api/notifications${qs}`);
   },
   getDashboardSummary: () => request<DashboardSummary>("/api/dashboard/summary"),
-  resetDemoData: () => request<{ status: string; message: string }>("/api/admin/reset", { method: "POST" }),
 
   // UAM workflow
-  listUAMTemplates: () => request<{ templates: Array<{ code: string; asset_types: string[]; requires_qa: boolean }>; actions: string[] }>("/api/uam/requests/templates"),
+  listUAMTemplates: () => request<{ templates: Array<{ code: string; asset_types: string[]; requires_qa: boolean }>; actions: string[]; folder_permissions: string[] }>("/api/uam/requests/templates"),
+  getUAMSelectors: () => request<UAMSelectors>("/api/uam/requests/selectors"),
+  getUAMEquipmentOptions: () => request<UAMEquipmentOption[]>("/api/uam/requests/equipment-options"),
   listUAMRequests: (params?: { status?: string; plant?: string }) => {
     const qs = new URLSearchParams();
     if (params?.status) qs.set("status", params.status);
@@ -196,11 +207,14 @@ export const api = {
     action: string; reason: string; plant: string; reviewer_id?: string;
     department_approver_id?: string; qa_approver_id?: string; it_executor_id?: string;
     form_data?: Record<string, unknown>;
+    auth_password: string; auth_reason: string;
   }) => request<import("../types").UAMRequest>("/api/uam/requests", { method: "POST", body: JSON.stringify(payload) }),
-  approveUAMRequest: (code: string, comment?: string) => request<import("../types").UAMRequest>(`/api/uam/requests/${code}/approve`, { method: "POST", body: JSON.stringify({ comment }) }),
-  requestUAMCorrection: (code: string, comment: string) => request<import("../types").UAMRequest>(`/api/uam/requests/${code}/correction`, { method: "POST", body: JSON.stringify({ comment }) }),
-  rejectUAMRequest: (code: string, comment: string) => request<import("../types").UAMRequest>(`/api/uam/requests/${code}/reject`, { method: "POST", body: JSON.stringify({ comment }) }),
-  executeUAMRequest: (code: string, user_login_id: string, password: string, comment?: string) => request<import("../types").UAMRequest>(`/api/uam/requests/${code}/execute`, { method: "POST", body: JSON.stringify({ user_login_id, password, comment }) }),
+  // Every workflow step is e-signed: the actor's own password + a reason.
+  approveUAMRequest: (code: string, sig: ESign, comment?: string) => request<import("../types").UAMRequest>(`/api/uam/requests/${code}/approve`, { method: "POST", body: JSON.stringify({ comment, ...sig }) }),
+  requestUAMCorrection: (code: string, sig: ESign, comment: string) => request<import("../types").UAMRequest>(`/api/uam/requests/${code}/correction`, { method: "POST", body: JSON.stringify({ comment, ...sig }) }),
+  rejectUAMRequest: (code: string, sig: ESign, comment?: string) => request<import("../types").UAMRequest>(`/api/uam/requests/${code}/reject`, { method: "POST", body: JSON.stringify({ comment, ...sig }) }),
+  resubmitUAMRequest: (code: string, sig: ESign, comment?: string) => request<import("../types").UAMRequest>(`/api/uam/requests/${code}/resubmit`, { method: "POST", body: JSON.stringify({ comment, ...sig }) }),
+  executeUAMRequest: (code: string, sig: ESign, user_login_id: string, password?: string, comment?: string) => request<import("../types").UAMRequest>(`/api/uam/requests/${code}/execute`, { method: "POST", body: JSON.stringify({ user_login_id, password, comment, ...sig }) }),
   acknowledgeUAMRequest: (code: string, comment?: string) => request<import("../types").UAMRequest>(`/api/uam/requests/${code}/acknowledge`, { method: "POST", body: JSON.stringify({ comment }) }),
   cancelUAMRequest: (code: string, comment?: string) => request<import("../types").UAMRequest>(`/api/uam/requests/${code}/cancel`, { method: "POST", body: JSON.stringify({ comment }) }),
   bulkDeactivateUser: (payload: { employee_id: string; it_executor_id: string; reason: string }) =>
@@ -208,9 +222,11 @@ export const api = {
 
   // Asset creation requests
   getAssetRequestSelectors: () => request<{ reviewers: Array<{id: string; name: string; department: string}>; it_executors: Array<{id: string; name: string}>; qa_approvers: Array<{id: string; name: string; department: string}> }>("/api/asset-requests/selectors"),
-  listAssetRequests: (params?: { status?: string }) => {
+  listAssetRequests: (params?: { status?: string; request_type?: string; equipment_code?: string }) => {
     const qs = new URLSearchParams();
     if (params?.status) qs.set("status", params.status);
+    if (params?.request_type) qs.set("request_type", params.request_type);
+    if (params?.equipment_code) qs.set("equipment_code", params.equipment_code);
     return request<AssetCreationRequest[]>(`/api/asset-requests?${qs.toString()}`);
   },
   createAssetRequest: (payload: Partial<AssetCreationRequest> & { plant: string }) =>
@@ -261,6 +277,8 @@ export const api = {
     request<BackupScheduleRow>(`/api/backup-schedule/${code}/update-done`, { method: "PUT", body: JSON.stringify({ last_backup_date, frequency_days: frequency_days ?? 30, notes, auth_password, backup_path }) }),
 
   // Preventive Maintenance
+  updateAdditionalPMDone: (id: number, last_pm_date: string, frequency_months: number, notes?: string, auth_password?: string) =>
+    request<PMRow>(`/api/preventive-maintenance/additional/${id}`, { method: "PUT", body: JSON.stringify({ last_pm_date, frequency_months, notes, auth_password }) }),
   listPM: (params?: { plant?: string }) => {
     const qs = new URLSearchParams();
     if (params?.plant) qs.set("plant", params.plant);

@@ -4,6 +4,7 @@ import type { Notification } from "../types";
 import { Card, CardBody } from "../components/ui/Card";
 import { Field, FieldLabel, Input } from "../components/ui/Input";
 import { Button } from "../components/ui/Button";
+import { formatDateTime } from "../lib/format";
 
 export function NotificationsPage() {
   const [items, setItems] = useState<Notification[]>([]);
@@ -56,7 +57,7 @@ export function NotificationsPage() {
                 <p className="text-xs font-medium text-slate-500">
                   {n.request_code ?? "-"} · To: {n.recipient_name} ({n.recipient_email})
                 </p>
-                <p className="text-xs text-slate-400">{new Date(n.created_at).toLocaleString()}</p>
+                <p className="text-xs text-slate-400">{formatDateTime(n.created_at)}</p>
               </div>
               <p className="mt-1 text-sm font-semibold text-slate-800">{n.subject}</p>
               <p className="text-sm text-slate-600">{n.body}</p>

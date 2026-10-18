@@ -9,7 +9,8 @@ const config: Record<string, { label: string; tone: "amber" | "blue" | "purple" 
   PENDING_USER_ACK: { label: "User Acknowledgement", tone: "amber" },
   IT_COMPLETED: { label: "Access Granted", tone: "green" },
   REJECTED: { label: "Rejected", tone: "red" },
-  // UAM requests
+  // Requests (UAM)
+  DRAFT: { label: "Draft", tone: "slate" },
   PENDING_REVIEW: { label: "Pending review", tone: "amber" },
   PENDING_DEPARTMENT_APPROVAL: { label: "Department approval", tone: "amber" },
   PENDING_QA_APPROVAL: { label: "QA approval", tone: "purple" },
@@ -19,8 +20,8 @@ const config: Record<string, { label: string; tone: "amber" | "blue" | "purple" 
   SUSPENDED: { label: "Suspended", tone: "amber" },
   CANCELLED: { label: "Cancelled", tone: "slate" },
   COMPLETED: { label: "Completed", tone: "green" },
-  // Asset creation workflow
-  CREATED: { label: "Created", tone: "blue" },
+  // Asset requests
+  CREATED: { label: "Pending review", tone: "blue" },
   UNDER_REVIEW: { label: "Under review", tone: "amber" },
   UNDER_IT_REVIEW: { label: "IT review", tone: "purple" },
   UNDER_APPROVAL: { label: "QA approval", tone: "purple" },
@@ -33,4 +34,8 @@ const config: Record<string, { label: string; tone: "amber" | "blue" | "purple" 
 export function StatusBadge({ status }: { status: RequestStatus | string }) {
   const { label, tone } = config[status] ?? { label: status, tone: "slate" as const };
   return <Badge tone={tone}>{label}</Badge>;
+}
+
+export function statusLabel(status: string) {
+  return config[status]?.label ?? status;
 }

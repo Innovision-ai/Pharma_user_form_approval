@@ -5,6 +5,7 @@ import type { AccessRequest } from "../types";
 import { Card } from "../components/ui/Card";
 import { DataTable } from "../components/ui/DataTable";
 import { StatusBadge } from "../components/StatusBadge";
+import { formatDateTime } from "../lib/format";
 
 export function ApprovalsPage() {
   const [items, setItems] = useState<AccessRequest[]>([]);
@@ -42,7 +43,7 @@ export function ApprovalsPage() {
               { header: "Equipment", render: (r) => r.equipment_name },
               { header: "Role", render: (r) => r.requested_role },
               { header: "Status", render: (r) => <StatusBadge status={r.status} /> },
-              { header: "Submitted", render: (r) => new Date(r.created_at).toLocaleString() },
+              { header: "Submitted", render: (r) => formatDateTime(r.created_at) },
             ]}
           />
         )}

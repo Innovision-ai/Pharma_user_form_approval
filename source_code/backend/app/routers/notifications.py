@@ -13,6 +13,8 @@ router = APIRouter(prefix="/api/notifications", tags=["notifications"])
 @router.get("", response_model=list[NotificationOut])
 def list_notifications(request_code: Optional[str] = None, limit: int = 200, db: Session = Depends(get_db)):
     """Notification Center - the mock outbox of every 'email' the system has sent."""
+    from app.routers.password_vault import sweep_expiry_notifications
+    sweep_expiry_notifications(db)
     q = db.query(Notification)
     if request_code:
         q = q.filter(Notification.request_code == request_code)

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search, Printer, Download } from "lucide-react";
+import { Search, Printer, FileDown, Columns3 } from "lucide-react";
 import { api } from "../lib/api";
 import type { Equipment } from "../types";
 import { Card } from "../components/ui/Card";
@@ -11,7 +11,7 @@ import { Input } from "../components/ui/Input";
 import { useToast } from "../components/ui/Toast";
 import { PageHeader } from "../components/ui/PageHeader";
 import { formatDate } from "../lib/format";
-import { downloadCsv, printReport } from "../components/PrintReport";
+import { PrintReport, printReport } from "../components/PrintReport";
 
 const PLANT_OPTIONS = ["P1", "P2", "P3"];
 // For inventory, filter by System Type per the client requirement (not just generic "type")
@@ -94,49 +94,40 @@ export function InventoryReportPage() {
   const retiredCount = filtered.filter((e) => !e.active).length;
 
   const toggleCol = (col: string) => {
-    const next = visibleCols.includes(col) ? visibleCols.filter((c) => c !== col) : [...visibleCols, col];
+    // keep the report's column order regardless of click order
+    const next = visibleCols.includes(col) ? visibleCols.filter((c) => c !== col) : COLUMN_KEYS.filter((k) => k === col || visibleCols.includes(k));
     setVisibleCols(next);
-    localStorage.setItem("inventory-cols", JSON.stringify(next));
+    try { localStorage.setItem("inventory-cols", JSON.stringify(next)); } catch { /* storage unavailable */ }
   };
 
-  const getCellValue = (e: Equipment, key: string): string => {
-    switch (key) {
-      case "allowed_roles": return Array.isArray(e.allowed_roles) ? e.allowed_roles.join("; ") : String(e.allowed_roles ?? "");
-      case "validation_date": return formatDate(e.validation_date);
-      case "validation_status": return e.validation_status === "validated" ? "Validated" : e.validation_status === "under_validation" ? "Under Validation" : e.validation_status ?? "";
-      default: return String((e as unknown as Record<string, unknown>)[key] ?? "");
-    }
-  };
-
-  const handleExportCsv = () => {
-    const rows = filtered.map((e) => visibleCols.map((k) => getCellValue(e, k)));
-    const headers = visibleCols.map((k) => COLUMN_HEADERS[k] ?? k);
-    downloadCsv(`inventory-report-${new Date().toISOString().split("T")[0]}.csv`, headers, rows);
-    showToast("Inventory report exported to CSV.", "success");
-  };
-
-  const handlePrint = () => {
-    printReport();
+  // Print / PDF only: an editable (CSV) export is not wanted for this report.
+  const handlePrint = () => printReport();
+  const handlePdf = () => {
+    showToast('Choose "Save as PDF" as the printer to export the report.');
+    window.setTimeout(printReport, 300);
   };
 
   return (
+    <PrintReport title={`Inventory Report${filters.status === "active" ? " – Active" : filters.status === "retired" ? " – Retired" : ""}`}>
     <div className="space-y-6">
+      <div className="no-print">
       <PageHeader
         eyebrow="Reports"
         title="Inventory Report"
-        description="View and export the complete equipment inventory with full computerized system details."
+        description="Complete equipment inventory with computerized system details. Print it or save it as PDF."
         actions={
           <div className="flex gap-2">
-            <Button variant="secondary" onClick={() => setShowColPicker((v) => !v)}>Columns</Button>
+            <Button variant="secondary" onClick={() => setShowColPicker((v) => !v)}><Columns3 size={15} /> Columns</Button>
             <Button variant="secondary" onClick={handlePrint}><Printer size={15} /> Print</Button>
-            <Button onClick={handleExportCsv}><Download size={15} /> Export CSV</Button>
+            <Button onClick={handlePdf}><FileDown size={15} /> Export PDF</Button>
           </div>
         }
       />
+      </div>
 
       {/* Column picker */}
       {showColPicker && (
-        <Card>
+        <Card className="no-print">
           <div className="p-4">
             <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-3">Select columns to display</p>
             <div className="flex flex-wrap gap-2">
@@ -152,7 +143,7 @@ export function InventoryReportPage() {
       )}
 
       {/* Summary cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="no-print grid grid-cols-3 gap-4">
         <Card>
           <div className="p-4">
             <p className="text-sm text-slate-500">Total Shown</p>
@@ -174,7 +165,7 @@ export function InventoryReportPage() {
       </div>
 
       {/* Filters */}
-      <div className="surface flex flex-col gap-3 p-4 sm:flex-row sm:items-center flex-wrap">
+      <div className="no-print surface flex flex-col gap-3 p-4 sm:flex-row sm:items-center flex-wrap">
         <div className="relative flex-1 min-w-[200px]">
           <Search size={16} className="absolute left-3 top-3 text-slate-400" />
           <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, code, application, CS ID..." className="pl-9" />
@@ -217,12 +208,14 @@ export function InventoryReportPage() {
               ...(visibleCols.includes("allowed_roles") ? [{ header: "Allowed Roles", render: (e: Equipment) => <div className="flex flex-wrap gap-1">{(Array.isArray(e.allowed_roles) ? e.allowed_roles : []).map((r: string) => <Badge key={r}>{r}</Badge>)}</div> }] : []),
               ...(visibleCols.includes("location") ? [{ header: "Department", render: (e: Equipment) => e.location }] : []),
               ...(visibleCols.includes("validation_status") ? [{ header: "Validation Status", render: (e: Equipment) => <Badge tone={e.validation_status === "validated" ? "green" : "amber"}>{e.validation_status === "validated" ? "Validated" : "Under Validation"}</Badge> }] : []),
-              ...(visibleCols.includes("validation_date") ? [{ header: "Validation Date", render: (e: Equipment) => formatDate(e.validation_date) }] : []),
+              ...(visibleCols.includes("validation_date") ? [{ header: "Validation Completion Date", render: (e: Equipment) => formatDate(e.validation_date) }] : []),
               { header: "Status", render: (e: Equipment) => <Badge tone={e.active ? "green" : "red"}>{e.active ? "Active" : "Retired"}</Badge> },
             ]}
           />
         )}
       </Card>
+      <p className="print-only text-xs">Total: {filtered.length} · Active: {activeCount} · Retired: {retiredCount}</p>
     </div>
+    </PrintReport>
   );
 }

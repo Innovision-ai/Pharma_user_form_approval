@@ -18,7 +18,7 @@ ROLE_LABELS = {
     ROLE_HOD: "Reviewer",
     ROLE_QA: "QA Approver",
     ROLE_ADMIN: "IT Executor",
-    ROLE_IT: "IT Support",
+    ROLE_IT: "IT Support (legacy)",
     ROLE_INVENTORY_REQUESTOR: "Inventory Requestor",
 }
 
@@ -62,8 +62,10 @@ UAM_ROLES = [
     "INVENTORY_MANAGER",
     "INVENTORY_REQUESTOR",
 ]
-UAM_TEMPLATES = ["MANUFACTURING", "QC", "ERP"]
-UAM_ASSET_TYPES = ["EQUIPMENT", "SOFTWARE"]
+UAM_TEMPLATES = ["MANUFACTURING", "QC", "ERP", "FOLDER_PROJECT"]
+UAM_ASSET_TYPES = ["EQUIPMENT", "SOFTWARE", "FOLDER"]
+# Folder / project requests: requested_role carries the permission level.
+UAM_FOLDER_PERMISSIONS = ["Read", "Write", "Modify", "Full Control"]
 UAM_ACTIONS = ["CREATE", "MODIFY", "DEACTIVATE", "ACTIVATE", "UNLOCK", "CHANGE_PASSWORD"]
 UAM_STATUS_DRAFT = "DRAFT"
 UAM_STATUS_PENDING_REVIEW = "PENDING_REVIEW"

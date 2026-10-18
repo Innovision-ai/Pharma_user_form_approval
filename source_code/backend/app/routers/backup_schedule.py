@@ -70,7 +70,7 @@ def _get_or_create_entry(db: Session, equipment_code: str, freq: int = 30) -> Ba
 
 
 def _build_row(eq: Equipment, entry: Optional[BackupScheduleEntry]) -> dict:
-    backup_path = getattr(entry, "backup_path", None) if entry else None
+    backup_path = entry.backup_path if entry else None
     return {
         "equipment_code": eq.equipment_code,
         "equipment_name": eq.name,
@@ -156,7 +156,8 @@ def update_done(
     entry = _get_or_create_entry(db, equipment_code, freq)
 
     old_freq = entry.frequency_days
-    old_path = getattr(entry, "backup_path", None)
+    old_path = entry.backup_path
+    old_last = entry.last_backup_date
 
     last_date = date.fromisoformat(payload["last_backup_date"])
     entry.last_backup_date = last_date
@@ -165,9 +166,8 @@ def update_done(
     entry.notes = payload.get("notes")
     entry.updated_by = current_user.name
 
-    # Update backup_path if provided (column may not exist on older DBs; schema_compat handles it)
-    if "backup_path" in payload and hasattr(entry, "backup_path"):
-        entry.backup_path = payload["backup_path"]
+    if "backup_path" in payload:
+        entry.backup_path = (payload["backup_path"] or "").strip() or None
 
     db.commit()
     db.refresh(entry)
@@ -177,7 +177,7 @@ def update_done(
         db, current_user, "BACKUP_UPDATED",
         f"Backup schedule updated for {eq.name} ({equipment_code})" + (f" — {reason}" if reason else ""),
         entity=equipment_code, field="Last Backup Date",
-        old=None, new=last_date.isoformat(),
+        old=old_last, new=last_date,
         plant=eq.plant,
     )
     if old_freq != freq:
@@ -188,7 +188,7 @@ def update_done(
             old=str(old_freq), new=str(freq),
             plant=eq.plant, commit=False,
         )
-    new_path = getattr(entry, "backup_path", None)
+    new_path = entry.backup_path
     if old_path != new_path:
         log_audit(
             db, current_user, "BACKUP_UPDATED",

@@ -7,7 +7,6 @@ import { LoginPage } from "./pages/LoginPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { EquipmentMasterPage } from "./pages/EquipmentMasterPage";
 import { EquipmentDetailsPage } from "./pages/EquipmentDetailsPage";
-import { ApproverMasterPage } from "./pages/ApproverMasterPage";
 import { UserManagementPage } from "./pages/UserManagementPage";
 import { InventoryReportPage } from "./pages/InventoryReportPage";
 import { CreateRequestPage } from "./pages/CreateRequestPage";
@@ -27,6 +26,7 @@ import { PeriodicReviewPage } from "./pages/PeriodicReviewPage";
 import { BackupSchedulePage } from "./pages/BackupSchedulePage";
 import { PreventiveMaintenancePage } from "./pages/PreventiveMaintenancePage";
 import { PasswordVaultPage } from "./pages/PasswordVaultPage";
+import { AboutPage } from "./pages/AboutPage";
 
 export function App() {
   return (
@@ -40,7 +40,8 @@ export function App() {
 
             <Route path="/equipment" element={<RequireRole roles={["ADMIN"]}><EquipmentMasterPage /></RequireRole>} />
             <Route path="/equipment/:code" element={<EquipmentDetailsPage />} />
-            <Route path="/approvers" element={<RequireRole roles={["ADMIN"]}><ApproverMasterPage /></RequireRole>} />
+            {/* Approver Master removed: approvers are managed through user roles */}
+            <Route path="/approvers" element={<Navigate to="/users" replace />} />
             <Route path="/users" element={<RequireRole roles={["ADMIN"]}><UserManagementPage /></RequireRole>} />
             <Route path="/inventory" element={<RequireRole roles={["ADMIN"]}><InventoryReportPage /></RequireRole>} />
 
@@ -53,7 +54,7 @@ export function App() {
             <Route path="/uam/requests/:code" element={<UAMRequestDetailPage />} />
 
             <Route path="/asset-requests" element={<AssetRequestsPage />} />
-            <Route path="/asset-requests/new" element={<RequireRole roles={["EMPLOYEE", "ADMIN"]}><CreateAssetRequestPage /></RequireRole>} />
+            <Route path="/asset-requests/new" element={<RequireRole roles={["EMPLOYEE", "ADMIN", "INVENTORY_REQUESTOR"]}><CreateAssetRequestPage /></RequireRole>} />
             <Route path="/asset-requests/:code" element={<AssetRequestDetailPage />} />
 
             <Route path="/periodic-review" element={<RequireRole roles={["IT", "ADMIN"]}><PeriodicReviewPage /></RequireRole>} />
@@ -66,6 +67,7 @@ export function App() {
 
             <Route path="/audit" element={<AuditTrailPage />} />
             <Route path="/notifications" element={<NotificationsPage />} />
+            <Route path="/about" element={<AboutPage />} />
 
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
           </Route>
