@@ -166,7 +166,7 @@ export function CreateAssetRequestPage() {
         <PageHeader
           eyebrow="Asset Requests"
           title="Asset Retire Request"
-          description="Once this request is approved by Reviewer → IT → QA, the equipment is automatically marked Retired and removed from PM, backup and periodic review lists."
+          description="Once this request is approved by Reviewer → IT → QA, the equipment is automatically marked Retired and taken out of the PM, backup and periodic review planners (it stays visible for history)."
         />
         <form onSubmit={submit} className="space-y-6">
           <Card>

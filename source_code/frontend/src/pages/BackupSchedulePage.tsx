@@ -133,7 +133,7 @@ export function BackupSchedulePage() {
           <PageHeader
             eyebrow="Operations"
             title="Backup Schedule"
-            description="Systems with backup enabled. Retired equipment is excluded."
+            description="Systems with backup enabled. Retired systems stay listed for history but are not part of the planner."
             actions={
               <div className="flex flex-wrap gap-2">
                 <Button variant="secondary" onClick={() => { setPlannerOpen(true); void loadPlanner(); }}><Calendar size={15} /> Planner</Button>

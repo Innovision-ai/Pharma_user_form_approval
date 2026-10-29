@@ -216,7 +216,7 @@ export function PreventiveMaintenancePage() {
           <PageHeader
             eyebrow="Operations"
             title="Preventive Maintenance"
-            description="Systems with a Computer System ID, plus additional systems (servers, components). Retired equipment is excluded."
+            description="Systems with a Computer System ID, plus additional systems (servers, components). Retired systems stay listed for history but are not part of the planner."
             actions={
               <div className="flex flex-wrap gap-2">
                 {canUpdate && <Button variant="secondary" onClick={() => setAddOpen(true)}><Plus size={15} /> Add system</Button>}

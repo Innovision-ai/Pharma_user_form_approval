@@ -93,7 +93,7 @@ export function AssetRequestDetailPage() {
     qa: {
       title: "QA approve?",
       message: isRetire
-        ? `Approving retires equipment ${request.equipment_code}; it will be removed from PM, backup and periodic review.`
+        ? `Approving retires equipment ${request.equipment_code}; it stays visible for history but is taken out of the PM, backup and periodic review planners.`
         : "Approve this asset request. A new system is registered in Equipment Master (Under validation).",
       label: "Yes, approve", done: "Approved.",
     },

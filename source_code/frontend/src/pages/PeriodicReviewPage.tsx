@@ -136,7 +136,7 @@ export function PeriodicReviewPage() {
           <PageHeader
             eyebrow="Compliance"
             title="Periodic Review Management"
-            description="Validated computerized systems due for periodic review. Under-validation and retired systems are excluded."
+            description="Validated computerized systems due for periodic review. Under-validation systems are excluded; retired systems stay listed for history but are not part of the planner."
             actions={
               <div className="flex flex-wrap gap-2">
                 <Button variant="secondary" onClick={() => { setPlannerOpen(true); void loadPlanner(); }}><Calendar size={15} /> Planner</Button>
