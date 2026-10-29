@@ -116,11 +116,13 @@ export function BackupSchedulePage() {
   const columns: Column<BackupScheduleRow>[] = [
     ...baseColumns,
     { header: "Updated by", render: (r) => <span className="text-xs text-slate-500">{r.updated_by || "—"}</span> },
+    { header: "Status", render: (r) => (r.active === false ? <Badge tone="red">Retired</Badge> : <Badge tone="green">Active</Badge>) },
     ...(canUpdate ? [{
       header: "",
       noPrint: true,
       className: "px-6 py-4",
-      render: (r: BackupScheduleRow) => <Button size="sm" onClick={() => openDone(r)}>Mark done</Button>,
+      // Retired systems stay listed for their history but cannot be updated
+      render: (r: BackupScheduleRow) => (r.active === false ? null : <Button size="sm" onClick={() => openDone(r)}>Update</Button>),
     }] : []),
   ];
 

@@ -154,6 +154,20 @@ def import_users(
     return {"created": created, "skipped": skipped, "errors": errors}
 
 
+@router.get("/{employee_id}/access")
+def user_equipment_access(
+    employee_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Equipment on which this user's ID has been created (from completed requests)."""
+    from app.access import user_access
+
+    if not db.query(User).filter(User.employee_id == employee_id).first():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    return user_access(db, employee_id=employee_id)
+
+
 @router.post("/{employee_id}/unlock")
 def unlock_user(
     employee_id: str,

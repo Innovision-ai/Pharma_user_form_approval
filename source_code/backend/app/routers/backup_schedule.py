@@ -32,12 +32,13 @@ def _active_backup_equipment(
     eq_type: Optional[str] = None,
     department: Optional[str] = None,
     search: Optional[str] = None,
+    include_retired: bool = False,
 ):
-    """Active equipment with backup_include=True."""
-    q = db.query(Equipment).filter(
-        Equipment.active.is_(True),
-        Equipment.backup_include.is_(True),
-    )
+    """Equipment with backup_include=True. Retired systems are listed for their
+    history only and never appear in the planner."""
+    q = db.query(Equipment).filter(Equipment.backup_include.is_(True))
+    if not include_retired:
+        q = q.filter(Equipment.active.is_(True))
     if plant:
         q = q.filter(Equipment.plant == plant)
     if eq_type:
@@ -86,6 +87,7 @@ def _build_row(eq: Equipment, entry: Optional[BackupScheduleEntry]) -> dict:
         "notes": entry.notes if entry else None,
         "updated_by": entry.updated_by if entry else None,
         "updated_at": entry.updated_at.isoformat() if entry and entry.updated_at else None,
+        "active": eq.active,
     }
 
 
@@ -98,7 +100,8 @@ def list_backup_schedule(
     current_user: User = Depends(get_current_user),
     plant: Optional[str] = Depends(get_current_plant),
 ):
-    equips = _active_backup_equipment(db, plant=plant, eq_type=type, department=department, search=search)
+    equips = _active_backup_equipment(db, plant=plant, eq_type=type, department=department, search=search,
+                                      include_retired=True)
     rows = []
     for eq in equips:
         entry = db.query(BackupScheduleEntry).filter(

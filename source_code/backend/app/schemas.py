@@ -80,7 +80,7 @@ class EquipmentCreate(BaseModel):
     location: str = Field(min_length=1, max_length=80)
     plant: str = Field(default="P1", max_length=20)
     allowed_roles: list[str] = Field(min_length=1)
-    validation_date: date
+    validation_date: Optional[date] = None  # validation completion date, set once validated
     # Extended computerized system fields
     system_id: Optional[str] = None
     system_type: Optional[str] = None
@@ -120,7 +120,7 @@ class EquipmentOut(BaseModel):
     location: str
     plant: str
     allowed_roles: list[str]
-    validation_date: date
+    validation_date: Optional[date] = None
     active: bool
     created_at: datetime
     created_by: str

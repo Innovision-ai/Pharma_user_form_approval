@@ -172,6 +172,14 @@ def t_equipment(page: Page):
     check(13, "system type filter applies", types >= 1)
     page.locator("select[aria-label='System type filter']").select_option("")
     page.get_by_role("button", name="Columns").click()
+    # the pop-up must be on top of the table (it used to open behind it)
+    on_top = page.evaluate("""() => {
+        const label = [...document.querySelectorAll('label')].find(l => l.textContent.trim() === 'Computer System ID');
+        const r = label.getBoundingClientRect();
+        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        return label.contains(hit);
+    }""")
+    check("R2", "Columns pop-up opens above the table", on_top)
     page.get_by_label("Computer System ID").check()
     page.wait_for_timeout(300)
     heads2 = [h.strip().upper() for h in page.locator("main table thead th").all_inner_texts()]
@@ -209,11 +217,11 @@ def t_equipment(page: Page):
     check(25, "saving as Validated before approval is refused", "only be set to 'Validated'" in msg, msg[-300:])
     drawer.locator("select").filter(has=page.locator("option", has_text="Under Validation")).select_option("under_validation")
     drawer.get_by_role("button", name="Save").click()
-    msg = toast_text(page, r"Equipment \d{4} created|rror|ailed")
-    m = re.search(r"Equipment (\d{4}) created", msg)
+    msg = toast_text(page, r"Equipment \d{4} saved|rror|ailed")
+    m = re.search(r"Equipment (\d{4}) saved", msg)
     check(12, "new equipment gets a numeric code", m is not None, msg[-300:])
     check(21, "save works (no 'Failed to fetch')", "Failed to fetch" not in msg)
-    check(45, "asset request raised for new equipment", "asset creation request was raised" in msg)
+    check("R2", "save message has no automatic asset request", bool(m) and re.search(r"Equipment \d{4} saved\.?$", msg.strip().splitlines()[-1]) is not None, msg[-200:])
     globals()["NEW_CODE"] = m.group(1) if m else None
     shot(page, "05-equipment-created")
 
@@ -230,6 +238,13 @@ def t_equipment(page: Page):
     heads = [h.strip().upper() for h in page.locator("main table thead th").all_inner_texts()]
     check(17, "audit trail has Old Value / New Value", "OLD VALUE" in heads and "NEW VALUE" in heads, heads)
     first_ts = page.locator("main table tbody tr td").first.inner_text()
+    box = page.evaluate("""() => {
+        const t = document.querySelector('main table');
+        const wrap = t.parentElement;
+        const r = wrap.getBoundingClientRect();
+        return { bottom: r.bottom, vh: window.innerHeight, scrolls: wrap.scrollWidth > wrap.clientWidth, overflow: getComputedStyle(wrap).overflowY };
+    }""")
+    check("R2", "audit table scrolls inside the screen (horizontal bar visible)", box["bottom"] <= box["vh"] + 1 and box["overflow"] == "auto", box)
     check(18, "audit timestamp DD/MM/YYYY HH:mm (24h)", re.match(r"^\d{2}/\d{2}/\d{4} \d{2}:\d{2}$", first_ts.strip()) is not None, first_ts)
     shot(page, "06-audit")
 
@@ -261,6 +276,23 @@ def t_users(page: Page):
     shot(page, "07-add-user")
     page.keyboard.press("Escape")
     dlg.get_by_role("button", name="Cancel").click()
+    body = page.locator("main").inner_text()
+    check("R2", "active / inactive user list can be printed and exported", "Print list" in body and "Export list" in body)
+    page.locator("main select").nth(2).select_option("false")
+    page.wait_for_timeout(1500)
+    page.emulate_media(media="print")
+    title = page.locator(".print-header").first.inner_text()
+    check("R2", "user list report titled by status", "Inactive User List" in title, title)
+    page.emulate_media(media="screen")
+    page.locator("main select").nth(2).select_option("")
+    page.wait_for_timeout(1500)
+    row = page.locator("main table tbody tr", has_text="ADM001").first
+    check("R2", "View button on each user", row.get_by_role("button", name="View").count() == 1)
+    row.get_by_role("button", name="View").click()
+    page.wait_for_timeout(1500)
+    view = page.locator("div.fixed.inset-0").last.inner_text()
+    check("R2", "user view shows on how many equipment the ID exists", "User ID created on" in view, view[:200])
+    page.locator("div.fixed.inset-0").last.get_by_role("button", name="Close", exact=True).last.click()
 
 
 @section("inventory")
@@ -301,7 +333,7 @@ def t_pm(page: Page):
     row = page.locator("main table tbody tr", has_text=f"File Server {TAG}")
     check(52, "additional system added to PM list", row.count() == 1, added)
     # mark done with e-signature (rows 53, 64)
-    row.get_by_role("button", name=re.compile("Mark done")).click()
+    row.get_by_role("button", name=re.compile("^Update$")).click()
     form = page.locator("div.fixed.inset-0").last
     check(64, "mark-done form visible (not hidden behind dialog)", form.locator("input[type=date]").first.is_visible())
     form.get_by_role("button", name=re.compile("Save|Continue|Next")).last.click()
@@ -338,7 +370,7 @@ def t_backup(page: Page):
     check(59, "backup report download", "Export" in body)
     row = page.locator("main table tbody tr").first
     bk_code = row.locator("td").first.inner_text().strip()
-    row.get_by_role("button", name=re.compile("Mark done")).click()
+    row.get_by_role("button", name=re.compile("^Update$")).click()
     form = page.locator("div.fixed.inset-0").last
     freq = form.locator("input[type=number]").first
     check(57, "backup frequency editable", freq.is_visible() and freq.is_editable())
@@ -364,7 +396,7 @@ def t_periodic(page: Page):
     check(67, "periodic review report download", "Export" in body)
     row = page.locator("main table tbody tr").first
     pr_code = row.locator("td").first.inner_text().strip()
-    row.get_by_role("button", name=re.compile("Mark done")).click()
+    row.get_by_role("button", name=re.compile("^Update$")).click()
     page.locator("div.fixed.inset-0").last.get_by_role("button", name=re.compile("Save|Continue|Next")).last.click()
     page.wait_for_timeout(300)
     esign(page)
@@ -473,11 +505,31 @@ def t_requests(page: Page):
     check(31, "IT Executor (Admin) completes execution", "acknowledg" in page.locator("main").inner_text().lower())
     shot(page, "15-executed")
 
-    page.goto(f"{BASE}/asset-requests")
+    # asset creation request for already registered equipment: details auto-populated
+    page.goto(f"{BASE}/asset-requests/new")
     page.wait_for_load_state("networkidle")
-    body = page.locator("main").inner_text()
-    check(72, "asset requests numbered AST-YY-NNNNNN", re.search(r"AST-\d{2}-\d{6}", body) is not None)
-    shot(page, "16-asset-requests")
+    page.locator("main select").first.select_option(code)
+    page.wait_for_timeout(500)
+    name_val = page.get_by_placeholder("e.g. LIMS v2").input_value()
+    check("R2", "registered equipment selectable; details auto-populated", name_val == f"UI Test HPLC {TAG}", name_val)
+    page.locator("main").get_by_role("button", name=re.compile("Submit request")).click()
+    page.wait_for_url(re.compile(r".*/asset-requests/AST-\d{2}-\d{6}$"), timeout=30000)
+    check(72, "asset requests numbered AST-YY-NNNNNN", re.search(r"AST-\d{2}-\d{6}$", page.url) is not None, page.url)
+    shot(page, "16-asset-request")
+
+    # initiator closes the request; the ID then shows on equipment and user views
+    login(page, "EMP001", "P1")
+    page.goto(f"{BASE}/uam/requests/{req_code}")
+    page.wait_for_load_state("networkidle")
+    page.locator("main").get_by_role("button", name=re.compile("Acknowledge")).click()
+    page.locator("div.fixed.inset-0").last.get_by_role("button", name=re.compile("Yes|Acknowledge|Confirm")).last.click()
+    toast_text(page, r"(?i)completed|closed")
+    login(page, "ADM001", "P1")
+    page.goto(f"{BASE}/equipment/{code}")
+    page.wait_for_load_state("networkidle")
+    users_txt = toast_text(page, r"emp001\.hplc")
+    check("R2", "equipment details lists users with an ID on it", "emp001.hplc" in users_txt and "Yash" in users_txt, users_txt[-300:])
+    shot(page, "17-equipment-users")
 
 
 def main():

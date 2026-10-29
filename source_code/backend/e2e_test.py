@@ -70,7 +70,7 @@ check(8, "demo reset endpoint disabled", r.status_code == 403, r.status_code)
 # ---------- Equipment (rows 11, 16, 18, 21, 25, 44, 45, 71) ----------
 eq_body = {
     "name": f"E2E HPLC {TAG}", "type": "Instrument", "location": "R&D", "plant": "P1",
-    "allowed_roles": ["Analyst", "Reviewer"], "validation_date": str(date.today()),
+    "allowed_roles": ["Analyst", "Reviewer"],
     "system_type": "Software", "gamp_category": "4", "computer_system_id": f"CS-{TAG}",
     "validation_status": "validated", "backup_include": True, "periodic_review_frequency": 12,
 }
@@ -81,10 +81,17 @@ r = client.post("/api/equipment", json=eq_body, headers=ADM)
 eq = r.json()
 code = eq.get("equipment_code", "")
 check(12, "equipment code is numeric", r.status_code == 201 and code.isdigit(), code)
+check("R2", "validation completion date optional", r.status_code == 201 and eq.get("validation_date") is None, eq.get("validation_date"))
 
 reqs = client.get("/api/asset-requests", params={"equipment_code": code}, headers=ADM).json()
-create_req = next((x for x in reqs if x["request_type"] == "CREATE"), None)
-check(45, "asset creation request auto-raised for new equipment", create_req is not None, reqs)
+check("R2", "no asset request created automatically with equipment", reqs == [], reqs)
+r = client.post("/api/asset-requests", json={"request_type": "CREATE", "equipment_code": code, "plant": "P1"}, headers=EMP)
+create_req = r.json()
+check("R2", "asset request for registered equipment auto-populates details",
+      r.status_code == 201 and create_req.get("system_name") == eq_body["name"]
+      and create_req.get("computer_name") == f"CS-{TAG}", r.text[:200])
+r = client.post("/api/asset-requests", json={"request_type": "CREATE", "equipment_code": code, "plant": "P1"}, headers=EMP)
+check("R2", "second creation request for same equipment blocked", r.status_code == 409, r.status_code)
 check(72, "asset request numbered AST-YY-NNNNNN",
       create_req and create_req["request_code"].startswith(f"AST-{date.today():%y}-"), create_req and create_req["request_code"])
 
@@ -97,6 +104,9 @@ r2 = client.post(f"/api/asset-requests/{ac}/it-review-complete", json={}, header
 r3 = client.post(f"/api/asset-requests/{ac}/qa-approve", json={}, headers=QA)
 check(45, "asset request reviewer -> IT -> QA approval", r3.status_code == 200 and r3.json()["status"] == "APPROVED",
       (r1.text[:100], r2.text[:100], r3.text[:100]))
+r = client.put(f"/api/equipment/{code}", json={**eq_body, "validation_status": "validated", "make": "Agilent"}, headers=ADM)
+check("R2", "completion date required once Validated", r.status_code == 400, r.status_code)
+eq_body["validation_date"] = str(date.today())
 r = client.put(f"/api/equipment/{code}", json={**eq_body, "validation_status": "validated", "make": "Agilent"}, headers=ADM)
 check(71, "validation allowed after asset creation approved", r.status_code == 200, r.text[:200])
 
@@ -158,9 +168,20 @@ for path, h in (("review-complete", HOD), ("it-review-complete", IT), ("qa-appro
     client.post(f"/api/asset-requests/{rc}/{path}", json={}, headers=h)
 eq_now = client.get(f"/api/equipment/{code}", headers=ADM).json()
 check(45, "approved retire request retires equipment", eq_now["active"] is False, eq_now["active"])
-codes = lambda ep: {x["equipment_code"] for x in client.get(ep, headers=ADM).json()}  # noqa: E731
-check(63, "retired system removed from PM / backup / periodic review",
-      code not in codes("/api/preventive-maintenance") | codes("/api/backup-schedule") | codes("/api/periodic-review"))
+rows_of = lambda ep, **kw: client.get(ep, headers=ADM, params=kw).json()  # noqa: E731
+listed = [next((x for x in rows_of(ep) if x["equipment_code"] == code), None)
+          for ep in ("/api/preventive-maintenance", "/api/backup-schedule", "/api/periodic-review")]
+check("R2", "retired system still listed (marked retired) for history",
+      all(x is not None and x["active"] is False for x in listed), listed)
+yr = date.today().year
+planned = set()
+for ep in ("/api/preventive-maintenance/planner", "/api/backup-schedule/planner", "/api/periodic-review/planner"):
+    for y in (yr, yr + 1):
+        planned |= {x["equipment_code"] for x in rows_of(ep, year=y)}
+check(63, "retired system not part of any planner", code not in planned)
+r = client.put(f"/api/backup-schedule/{code}/update-done",
+               json={"last_backup_date": str(date.today()), "auth_password": PW}, headers=ADM)
+check("R2", "retired system cannot be updated", r.status_code == 422, r.status_code)
 
 # ---------- Requests (UAM) rows 72-80 ----------
 eq2 = client.post("/api/equipment", json={**eq_body, "name": f"E2E Dissolution {TAG}", "computer_system_id": None,
@@ -203,6 +224,11 @@ r = client.post(f"/api/uam/requests/{uc}/execute", json=esign({"user_login_id": 
 check(31, "IT Executor (Admin) executes request", r.status_code == 200 and r.json()["status"] == "PENDING_INITIATOR_ACK", r.text[:200])
 r = client.post(f"/api/uam/requests/{uc}/acknowledge", json={}, headers=EMP)
 check(73, "initiator acknowledges and closes", r.status_code == 200 and r.json()["status"] == "COMPLETED", r.text[:200])
+acc = client.get("/api/users/EMP001/access", headers=ADM).json()
+check("R2", "user view lists equipment where the user ID exists",
+      any(a["equipment_code"] == code2 and a["status"] == "Active" and a["user_id"] == "yash.a" for a in acc), acc)
+eu = client.get(f"/api/equipment/{code2}/users", headers=ADM).json()
+check("R2", "equipment details lists its active users", any(u["employee_id"] == "EMP001" for u in eu), eu)
 r = client.post("/api/uam/requests", json={**base, "action": "MODIFY", **esign()}, headers=EMP)
 check(76, "non-create action allowed once user ID exists", r.status_code == 201, r.text[:200])
 

@@ -45,7 +45,7 @@ class Equipment(Base):
     location: Mapped[str] = mapped_column(String(80))
     plant: Mapped[str] = mapped_column(String(20), default="P1")
     allowed_roles: Mapped[str] = mapped_column(Text)  # comma-separated role names
-    validation_date: Mapped[date] = mapped_column(Date)
+    validation_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)  # validation completion date
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     created_by: Mapped[str] = mapped_column(String(120))

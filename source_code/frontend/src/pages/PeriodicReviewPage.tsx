@@ -113,18 +113,19 @@ export function PeriodicReviewPage() {
     { header: "Department", render: (r) => str(r.department) || "—" },
     { header: "Periodic Review Freq. (months)", render: (r) => r.periodic_review_frequency ?? <span className="text-slate-400">—</span> },
     { header: "Last Review", render: (r) => formatDate(r.last_review_date) },
-    { header: "Next Review", render: (r) => <DueBadge date={r.next_review_date} /> },
+    { header: "Next Review", render: (r) => (r.active === false ? <span className="text-slate-400">—</span> : <DueBadge date={r.next_review_date} />) },
   ];
   const columns: Column<PeriodicReviewRow>[] = [
     ...baseColumns,
     { header: "Updated by", render: (r) => <span className="text-xs text-slate-500">{r.updated_by || "—"}</span> },
+    { header: "Status", render: (r) => (r.active === false ? <Badge tone="red">Retired</Badge> : <Badge tone="green">Active</Badge>) },
     ...(canUpdate ? [{
       header: "",
       noPrint: true,
       className: "px-6 py-4",
-      render: (r: PeriodicReviewRow) => (
-        <Button size="sm" onClick={() => { setTarget(r); setForm({ date: today(), notes: "" }); }}>Mark done</Button>
-      ),
+      render: (r: PeriodicReviewRow) => (r.active === false ? null : (
+        <Button size="sm" onClick={() => { setTarget(r); setForm({ date: today(), notes: "" }); }}>Update</Button>
+      )),
     }] : []),
   ];
 

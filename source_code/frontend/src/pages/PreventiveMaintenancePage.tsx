@@ -190,15 +190,16 @@ export function PreventiveMaintenancePage() {
     { header: "Department", render: (r) => r.department || <span className="text-slate-400">—</span> },
     { header: "Frequency (months)", render: (r) => r.frequency_months ?? 6 },
     { header: "Last PM", render: (r) => formatDate(r.last_pm_date) },
-    { header: "Next PM", render: (r) => <DueBadge date={r.next_pm_date} /> },
+    { header: "Next PM", render: (r) => (r.active === false ? <span className="text-slate-400">—</span> : <DueBadge date={r.next_pm_date} />) },
     { header: "Source", render: (r) => r.source === "additional" ? <Badge tone="purple">Additional</Badge> : <Badge tone="blue">Equipment</Badge> },
+    { header: "Status", render: (r) => (r.active === false ? <Badge tone="red">Retired</Badge> : <Badge tone="green">Active</Badge>) },
     {
       header: "",
       noPrint: true,
       className: "px-6 py-4",
       render: (r) => (
         <div className="flex flex-wrap gap-2">
-          {canUpdate && <Button size="sm" onClick={() => openDone(r)}>Mark done</Button>}
+          {canUpdate && r.active !== false && <Button size="sm" onClick={() => openDone(r)}>Update</Button>}
           <Button size="sm" variant="secondary" onClick={() => openHistory(r)}><History size={13} /> History</Button>
           {canUpdate && r.source === "additional" && (
             <Button size="sm" variant="danger" title="Remove system" onClick={() => setDeleteTarget(r)}><Trash2 size={13} /></Button>

@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { Card, CardBody, CardHeader, CardTitle } from "../components/ui/Card";
 import { DataTable } from "../components/ui/DataTable";
@@ -40,7 +40,7 @@ export function EquipmentDetailsPage() {
   }, [code, showToast]);
 
   const filteredUsers = useMemo(() =>
-    users.filter(u => u.user_name.toLowerCase().includes(search.toLowerCase()) || u.department.toLowerCase().includes(search.toLowerCase())),
+    users.filter(u => `${u.user_name} ${u.employee_id} ${u.user_id} ${u.department}`.toLowerCase().includes(search.toLowerCase())),
     [users, search]);
 
   return (
@@ -105,22 +105,25 @@ export function EquipmentDetailsPage() {
             <div className="flex items-end justify-between p-4 border-b">
               <div className="flex-1 max-w-sm">
                 <FieldLabel>Search users</FieldLabel>
-                <Input placeholder="Name or department..." value={search} onChange={(e) => setSearch(e.target.value)} />
+                <Input placeholder="Name, user ID or department..." value={search} onChange={(e) => setSearch(e.target.value)} />
               </div>
               <div className="text-sm font-medium text-slate-600 bg-slate-100 px-3 py-1.5 rounded-full">
-                {filteredUsers.length} active users
+                {filteredUsers.filter(u => u.status === "Active").length} active · {filteredUsers.length} total users
               </div>
             </div>
             <DataTable
               rows={filteredUsers}
-              rowKey={(u) => u.user_id + u.granted_date}
+              rowKey={(u) => `${u.employee_id}-${u.user_id}`}
+              emptyMessage="No user IDs created on this equipment yet."
               columns={[
-                { header: "User Name", render: (u) => <span className="font-medium">{u.user_name}</span> },
-                { header: "User ID", render: (u) => u.user_id },
+                { header: "User Name", render: (u) => <span className="font-medium">{u.user_name} <span className="text-xs text-slate-400">({u.employee_id})</span></span> },
+                { header: "User ID on system", render: (u) => <span className="font-mono text-xs">{u.user_id}</span> },
+                { header: "Role", render: (u) => u.role },
                 { header: "Department", render: (u) => u.department },
                 { header: "Access Granted By", render: (u) => u.access_granted_by },
                 { header: "Granted Date", render: (u) => formatDateTime(u.granted_date) },
-                { header: "Status", render: (u) => <Badge tone="green">{u.status}</Badge> },
+                { header: "Request", render: (u) => u.request_code.match(/^\d{2}-\d{6}$/) ? <Link className="font-semibold text-brand-600" to={`/uam/requests/${u.request_code}`}>{u.request_code}</Link> : u.request_code },
+                { header: "Status", render: (u) => <Badge tone={u.status === "Active" ? "green" : "red"}>{u.status}</Badge> },
               ]}
             />
           </Card>

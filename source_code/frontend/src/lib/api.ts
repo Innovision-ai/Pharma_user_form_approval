@@ -112,6 +112,8 @@ export const api = {
   },
   importUsers: (users: Array<{ employee_id: string; name: string; email: string; department: string; plant: string; plants?: string[]; role: string; password?: string }>) =>
     request<{ created: string[]; skipped: string[]; errors: string[] }>("/api/users/import", { method: "POST", body: JSON.stringify({ users }) }),
+  getUserAccess: (employee_id: string) =>
+    request<import("../types").UserAccess[]>(`/api/users/${employee_id}/access`),
   unlockUser: (employee_id: string) =>
     request<{ employee_id: string; locked: boolean }>(`/api/users/${employee_id}/unlock`, { method: "POST" }),
   createUser: (payload: {
@@ -135,9 +137,9 @@ export const api = {
     if (params?.validation_status) qs.set("validation_status", params.validation_status);
     return request<Equipment[]>(`/api/equipment?${qs.toString()}`);
   },
-  createEquipment: (payload: Partial<Equipment> & { name: string; location: string; allowed_roles: string[]; validation_date: string }) =>
+  createEquipment: (payload: Partial<Equipment> & { name: string; location: string; allowed_roles: string[]; validation_date?: string | null }) =>
     request<Equipment>("/api/equipment", { method: "POST", body: JSON.stringify(payload) }),
-  updateEquipment: (code: string, payload: Partial<Equipment> & { name: string; location: string; allowed_roles: string[]; validation_date: string }) =>
+  updateEquipment: (code: string, payload: Partial<Equipment> & { name: string; location: string; allowed_roles: string[]; validation_date?: string | null }) =>
     request<Equipment>(`/api/equipment/${code}`, { method: "PUT", body: JSON.stringify(payload) }),
   toggleEquipmentStatus: (code: string, active: boolean) =>
     request<Equipment>(`/api/equipment/${code}/status`, { method: "PATCH", body: JSON.stringify({ active }) }),

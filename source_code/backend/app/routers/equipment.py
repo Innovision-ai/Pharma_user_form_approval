@@ -87,6 +87,13 @@ def next_equipment_code(db: Session) -> str:
 _next_equipment_code = next_equipment_code  # backward-compatible name
 
 
+def _require_completion_date(payload: EquipmentCreate) -> None:
+    """Validation completion date is filled in once the equipment is validated."""
+    if payload.validation_status == "validated" and not payload.validation_date:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST,
+                            "Validation Completion Date is required when the status is Validated")
+
+
 def _require_approved_create(db: Session, code: Optional[str]) -> None:
     approved_create = None
     if code:
@@ -190,16 +197,11 @@ def create_equipment(
     )
     _apply_extended_fields(item, payload)
     db.add(item)
-    db.flush()
-    # Every newly added equipment gets an asset creation request; once it is
-    # approved the equipment can be validated (and later retired by request).
-    from app.routers.asset_requests import create_linked_create_request
-    asset_req = create_linked_create_request(db, item, current_user)
     db.commit()
     db.refresh(item)
     log_audit(
         db, current_user, "EQUIPMENT_CREATED",
-        f"Created equipment {item.equipment_code}: {item.name} (asset request {asset_req.request_code})",
+        f"Created equipment {item.equipment_code}: {item.name}",
         entity=item.equipment_code, field="Status", old=None, new="Active",
         plant=item.plant,
     )
@@ -235,6 +237,7 @@ def update_equipment(
     new_val_status = payload.validation_status or ""
     if new_val_status == "validated" and current_val_status != "validated":
         _require_approved_create(db, code)
+    _require_completion_date(payload)
 
     item.name = payload.name
     item.type = payload.type
@@ -309,28 +312,20 @@ def get_equipment_users(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    from app.models import AccessRequest
-    from app.constants import STATUS_IT_COMPLETED
+    from app.access import user_access
 
     _get_or_404(db, code)
-
-    reqs = (
-        db.query(AccessRequest)
-        .filter(
-            AccessRequest.equipment_code == code,
-            AccessRequest.status == STATUS_IT_COMPLETED,
-        )
-        .all()
-    )
-
-    users = []
-    for r in reqs:
-        users.append({
-            "user_name": r.employee_name,
-            "department": r.employee_department,
-            "user_id": r.user_login_id or r.employee_id,
-            "access_granted_by": "IT Support",
-            "granted_date": r.it_submitted_at.isoformat() if r.it_submitted_at else r.updated_at.isoformat(),
-            "status": "Active",
-        })
-    return users
+    return [
+        {
+            "employee_id": a["employee_id"],
+            "user_name": a["user_name"],
+            "department": a["department"] or "",
+            "user_id": a["user_id"],
+            "role": a["role"],
+            "access_granted_by": a["granted_by"],
+            "granted_date": a["granted_date"],
+            "request_code": a["request_code"],
+            "status": a["status"],
+        }
+        for a in user_access(db, asset_code=code)
+    ]

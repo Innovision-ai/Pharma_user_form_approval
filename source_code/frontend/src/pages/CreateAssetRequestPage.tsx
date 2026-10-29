@@ -38,6 +38,9 @@ export function CreateAssetRequestPage() {
   const [departments, setDepartments] = useState<string[]>([]);
   const [equipment, setEquipment] = useState<Equipment | null>(null);
   const [busy, setBusy] = useState(false);
+  // Creation request for equipment already registered in Equipment Master
+  const [registered, setRegistered] = useState<Equipment[]>([]);
+  const [linkCode, setLinkCode] = useState(params.get("equipment") ?? "");
 
   const [form, setForm] = useState({
     system_name: "", system_id: "", system_type: "Software",
@@ -56,6 +59,31 @@ export function CreateAssetRequestPage() {
     api.getAssetRequestSelectors().then(setSelectors).catch(() => setSelectors(null));
     api.getDepartments(plant).then((d) => setDepartments(d.departments)).catch(() => setDepartments([]));
   }, [plant]);
+
+  useEffect(() => {
+    if (retireCode) return;
+    api.listEquipment({ activeOnly: true }).then(setRegistered).catch(() => setRegistered([]));
+  }, [retireCode]);
+
+  // Selecting registered equipment fills in all its details
+  useEffect(() => {
+    const eq = registered.find((e) => e.equipment_code === linkCode);
+    if (!eq) return;
+    setForm((prev) => ({
+      ...prev,
+      system_name: eq.name,
+      system_id: eq.system_id ?? "",
+      system_type: eq.system_type ?? prev.system_type,
+      make: eq.make ?? "",
+      model_name: eq.model_name ?? "",
+      application_name: eq.application_name ?? "",
+      gamp_category: eq.gamp_category && GAMP_OPTIONS.includes(eq.gamp_category) ? eq.gamp_category : prev.gamp_category,
+      usp_classification: eq.usp_classification ?? "",
+      department: eq.location ?? "",
+      location: eq.location ?? "",
+      computer_name: eq.computer_system_id ?? "",
+    }));
+  }, [linkCode, registered]);
 
   useEffect(() => {
     if (!retireCode) { setEquipment(null); return; }
@@ -90,6 +118,7 @@ export function CreateAssetRequestPage() {
             approval_date: form.approval_date || undefined,
             plant,
             request_type: "CREATE",
+            equipment_code: linkCode || undefined,
           } as Parameters<typeof api.createAssetRequest>[0]);
       showToast(`${req.request_code} submitted for review.`);
       navigate(`/asset-requests/${req.request_code}`);
@@ -153,7 +182,7 @@ export function CreateAssetRequestPage() {
                   <Info label="Computer System ID" value={equipment.computer_system_id} />
                   <Info label="Department" value={equipment.location} />
                   <Info label="Plant" value={equipment.plant} />
-                  <Info label="Validation date" value={formatDate(equipment.validation_date)} />
+                  <Info label="Validation completion date" value={formatDate(equipment.validation_date)} />
                   <Info label="Status" value={equipment.active ? "Active" : "Retired"} />
                 </div>
               ) : (
@@ -186,6 +215,25 @@ export function CreateAssetRequestPage() {
         description={`Submit a new computerized system for registration in plant ${plant}. The request goes through Reviewer → IT → QA approval.`}
       />
       <form onSubmit={submit} className="space-y-6">
+        <Card>
+          <CardHeader><CardTitle>Equipment</CardTitle></CardHeader>
+          <CardBody>
+            <Field>
+              <FieldLabel>Registered equipment</FieldLabel>
+              <Select value={linkCode} onChange={(e) => setLinkCode(e.target.value)}>
+                <option value="">New system (not yet in Equipment Master)</option>
+                {registered.map((e) => (
+                  <option key={e.equipment_code} value={e.equipment_code}>{e.equipment_code} · {e.name} ({e.location})</option>
+                ))}
+              </Select>
+            </Field>
+            <p className="mt-2 text-xs text-slate-500">
+              {linkCode
+                ? "Details below are filled in from Equipment Master. Once approved, the equipment can be marked Validated."
+                : "On approval, the new system is registered in Equipment Master automatically."}
+            </p>
+          </CardBody>
+        </Card>
         <Card>
           <CardHeader><CardTitle>System identification</CardTitle></CardHeader>
           <CardBody>

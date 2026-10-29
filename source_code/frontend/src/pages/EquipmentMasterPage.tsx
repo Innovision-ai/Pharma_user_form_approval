@@ -212,7 +212,7 @@ export function EquipmentMasterPage() {
       allowed_roles: eq.allowed_roles,
       location: eq.location,
       validation_status: eq.validation_status ?? "under_validation",
-      validation_date: eq.validation_date,
+      validation_date: eq.validation_date ?? "",
       initial_validation_date: eq.initial_validation_date ?? "",
       latest_validation_date: eq.latest_validation_date ?? "",
       periodic_review_frequency: eq.periodic_review_frequency != null ? String(eq.periodic_review_frequency) : "",
@@ -226,8 +226,12 @@ export function EquipmentMasterPage() {
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => setForm((f) => ({ ...f, [key]: value }));
 
   const handleSave = async () => {
-    if (!form.name || !form.location || !form.type || !form.plant || !form.validation_date || form.allowed_roles.length === 0) {
+    if (!form.name || !form.location || !form.type || !form.plant || form.allowed_roles.length === 0) {
       showToast("Please fill in all required fields and add at least one role.", "error");
+      return;
+    }
+    if (form.validation_status === "validated" && !form.validation_date) {
+      showToast("Enter the Validation Completion Date for validated equipment.", "error");
       return;
     }
     setSaving(true);
@@ -235,6 +239,7 @@ export function EquipmentMasterPage() {
       const payload = {
         ...form,
         system_id: form.system_id || null,
+        validation_date: form.validation_date || null,
         periodic_review_frequency: form.periodic_review_frequency ? parseInt(form.periodic_review_frequency) : null,
         initial_validation_date: form.initial_validation_date || null,
         latest_validation_date: form.latest_validation_date || null,
@@ -246,7 +251,7 @@ export function EquipmentMasterPage() {
         showToast("Equipment updated.");
       } else {
         const created = await api.createEquipment(payload as Parameters<typeof api.createEquipment>[0]);
-        showToast(`Equipment ${created.equipment_code} created. An asset creation request was raised for approval.`);
+        showToast(`Equipment ${created.equipment_code} saved.`);
       }
       setModalOpen(false);
       load();
@@ -310,7 +315,8 @@ export function EquipmentMasterPage() {
         actions={<Button onClick={openCreate}><Plus size={16} /> Add equipment</Button>}
       />
 
-      <div className="surface flex flex-col gap-3 p-4 sm:flex-row sm:items-center flex-wrap">
+      {/* relative z-20: the Columns pop-up must sit above the table card below */}
+      <div className="surface relative z-20 flex flex-col gap-3 p-4 sm:flex-row sm:items-center flex-wrap">
         <div className="relative flex-1 min-w-[200px]">
           <Search size={16} className="absolute left-3 top-3.5 text-slate-400" />
           <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search equipment, department, application..." className="pl-9" />
@@ -451,7 +457,10 @@ export function EquipmentMasterPage() {
                 {VALIDATION_STATUS_OPTIONS.map((v) => <option key={v} value={v}>{validationLabel(v)}</option>)}
               </Select>
             </Field>
-            <Field><FieldLabel>15. Validation Completion Date *</FieldLabel><Input type="date" value={form.validation_date} onChange={(e) => set("validation_date", e.target.value)} /></Field>
+            <Field>
+              <FieldLabel>15. Validation Completion Date{form.validation_status === "validated" ? " *" : ""}</FieldLabel>
+              <Input type="date" value={form.validation_date} onChange={(e) => set("validation_date", e.target.value)} />
+            </Field>
           </div>
           {form.validation_status === "validated" && (
             <p className="-mt-2 text-xs text-amber-700">"Validated" is accepted only after the equipment's asset creation request is approved.</p>

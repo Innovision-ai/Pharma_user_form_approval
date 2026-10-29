@@ -57,6 +57,13 @@ COLUMN_ADDITIONS: dict[str, list[tuple[str, str]]] = {
 }
 
 
+# Columns that became optional. PostgreSQL only; SQLite dev databases built
+# before this change keep NOT NULL (recreate the local app.db if needed).
+DROP_NOT_NULL: list[tuple[str, str]] = [
+    ("equipment", "validation_date"),
+]
+
+
 def _existing_columns(engine: Engine, table: str) -> set[str]:
     return {col["name"] for col in inspect(engine).get_columns(table)}
 
@@ -75,3 +82,12 @@ def ensure_compatible_schema(engine: Engine) -> None:
                     conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {ddl}"))
             except Exception as exc:  # noqa: BLE001 - never block startup
                 print(f"[SCHEMA WARNING] could not add {table}.{col_name}: {exc}")
+    if engine.dialect.name == "postgresql":
+        for table, col in DROP_NOT_NULL:
+            if table not in tables:
+                continue
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text(f"ALTER TABLE {table} ALTER COLUMN {col} DROP NOT NULL"))
+            except Exception as exc:  # noqa: BLE001
+                print(f"[SCHEMA WARNING] could not relax {table}.{col}: {exc}")

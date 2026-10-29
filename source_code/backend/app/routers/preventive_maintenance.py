@@ -67,12 +67,13 @@ class AdditionalPMSystem(Base):
 def _active_pm_equipment(
     db: Session,
     plant: Optional[str] = None,
+    include_retired: bool = False,
 ):
-    """Active equipment with a computer_system_id (PM eligible)."""
-    q = db.query(Equipment).filter(
-        Equipment.active.is_(True),
-        Equipment.computer_system_id.isnot(None),
-    )
+    """Equipment with a computer_system_id (PM eligible). Retired systems are
+    listed for their history only and never appear in the planner."""
+    q = db.query(Equipment).filter(Equipment.computer_system_id.isnot(None))
+    if not include_retired:
+        q = q.filter(Equipment.active.is_(True))
     if plant:
         q = q.filter(Equipment.plant == plant)
     return q.order_by(Equipment.equipment_code).all()
@@ -110,6 +111,7 @@ def _build_row(eq: Equipment, entry: Optional[PreventiveMaintenanceEntry]) -> di
         "updated_by": entry.updated_by if entry else None,
         "updated_at": entry.updated_at.isoformat() if entry and entry.updated_at else None,
         "source": "equipment",
+        "active": eq.active,
     }
 
 
@@ -131,6 +133,7 @@ def _build_additional_row(sys: AdditionalPMSystem) -> dict:
         "updated_at": sys.updated_at.isoformat() if sys.updated_at else None,
         "source": "additional",
         "additional_id": sys.id,
+        "active": True,
     }
 
 
@@ -144,7 +147,7 @@ def list_pm(
     current_user: User = Depends(get_current_user),
     plant: Optional[str] = Depends(get_current_plant),
 ):
-    equips = _active_pm_equipment(db, plant=plant)
+    equips = _active_pm_equipment(db, plant=plant, include_retired=True)
     rows = []
     for eq in equips:
         entry = db.query(PreventiveMaintenanceEntry).filter(
@@ -174,6 +177,8 @@ def get_planner(
     all_rows = list_pm(db=db, current_user=current_user, plant=plant)
     result = []
     for row in all_rows:
+        if not row["active"]:
+            continue  # retired systems are kept for history, not planned
         next_date_str = row.get("next_pm_date")
         if not next_date_str:
             result.append(row)

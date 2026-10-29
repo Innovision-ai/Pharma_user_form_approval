@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search, Upload, UserMinus, Unlock, Pencil, Power } from "lucide-react";
+import { Search, Upload, UserMinus, Unlock, Pencil, Power, Eye, Printer, Download } from "lucide-react";
+import { Link } from "react-router-dom";
 import { api } from "../lib/api";
-import type { User } from "../types";
+import type { User, UserAccess } from "../types";
+import { PrintReport, downloadCsv, printReport } from "../components/PrintReport";
+import { formatDate } from "../lib/format";
 import { Card } from "../components/ui/Card";
 import { DataTable } from "../components/ui/DataTable";
 import { Badge } from "../components/ui/Badge";
@@ -89,6 +92,34 @@ export function UserManagementPage() {
   const [bulkBusy, setBulkBusy] = useState(false);
 
   const [departments, setDepartments] = useState<string[]>([]);
+
+  // View user: equipment on which the user ID exists
+  const [viewTarget, setViewTarget] = useState<User | null>(null);
+  const [access, setAccess] = useState<UserAccess[]>([]);
+  const [accessLoading, setAccessLoading] = useState(false);
+
+  const openView = (user: User) => {
+    setViewTarget(user);
+    setAccess([]);
+    setAccessLoading(true);
+    api.getUserAccess(user.employee_id)
+      .then(setAccess)
+      .catch((err) => showToast(err instanceof Error ? err.message : "Could not load access", "error"))
+      .finally(() => setAccessLoading(false));
+  };
+
+  const reportTitle = filters.active === "true" ? "Active User List" : filters.active === "false" ? "Inactive User List" : "User List";
+  const exportUsers = () => {
+    downloadCsv(
+      `${reportTitle.toLowerCase().replace(/ /g, "-")}-${new Date().toISOString().split("T")[0]}.csv`,
+      ["Username", "Name", "Email", "Department", "Plants", "Role", "Source", "Status"],
+      filtered.map((u) => [
+        u.employee_id, u.name, u.email, u.department, (u.plants?.length ? u.plants : [u.plant]).join("; "),
+        ROLE_LABELS[u.role] ?? u.role, u.auth_source === "DIRECTORY" ? "AD / ERP" : "Local",
+        u.active ? (u.locked ? "Active (locked)" : "Active") : "Inactive",
+      ]),
+    );
+  };
 
   // AD / ERP import
   const [importOpen, setImportOpen] = useState(false);
@@ -225,7 +256,9 @@ export function UserManagementPage() {
   };
 
   return (
+    <PrintReport title={`${reportTitle}${filters.role ? ` – ${ROLE_LABELS[filters.role] ?? filters.role}` : ""}`}>
     <div className="space-y-6">
+      <div className="no-print">
       <PageHeader
         eyebrow="Administration"
         title="User Management"
@@ -237,8 +270,9 @@ export function UserManagementPage() {
           </div>
         }
       />
+      </div>
 
-      <div className="surface flex flex-col gap-3 p-4 sm:flex-row sm:items-center flex-wrap">
+      <div className="no-print surface flex flex-col gap-3 p-4 sm:flex-row sm:items-center flex-wrap">
         <div className="relative flex-1 min-w-[200px]">
           <Search size={16} className="absolute left-3 top-3 text-slate-400" />
           <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name, ID, email, department..." className="pl-9" />
@@ -257,7 +291,12 @@ export function UserManagementPage() {
           <option value="false">Inactive</option>
         </Select>
         <Badge tone="blue">{filtered.length} shown</Badge>
+        <div className="ml-auto flex gap-2">
+          <Button variant="secondary" size="sm" onClick={printReport} title="Print or save the filtered list as PDF"><Printer size={14} /> Print list</Button>
+          <Button variant="secondary" size="sm" onClick={exportUsers}><Download size={14} /> Export list</Button>
+        </div>
       </div>
+      <p className="print-only text-xs">Total: {filtered.length} users{filters.active ? ` (${filters.active === "true" ? "active" : "inactive"} only)` : ""}</p>
 
       <Modal
         open={!!bulkTarget}
@@ -284,6 +323,59 @@ export function UserManagementPage() {
           </Field>
           <Field><FieldLabel>Reason *</FieldLabel><Textarea rows={3} value={bulkReason} onChange={(e) => setBulkReason(e.target.value)} placeholder="e.g. Employee left the organisation" /></Field>
         </div>
+      </Modal>
+
+
+      <Modal
+        open={!!viewTarget}
+        size="xl"
+        title={`User ${viewTarget?.employee_id ?? ""} — ${viewTarget?.name ?? ""}`}
+        onClose={() => setViewTarget(null)}
+        footer={<Button variant="secondary" onClick={() => setViewTarget(null)}>Close</Button>}
+      >
+        {viewTarget && (
+          <div className="space-y-5">
+            <div className="grid gap-3 sm:grid-cols-3">
+              {[
+                ["Username", viewTarget.employee_id],
+                ["Name", viewTarget.name],
+                ["Email", viewTarget.email],
+                ["Department", viewTarget.department],
+                ["Plants", (viewTarget.plants?.length ? viewTarget.plants : [viewTarget.plant]).join(", ")],
+                ["Role", ROLE_LABELS[viewTarget.role] ?? viewTarget.role],
+                ["Source", viewTarget.auth_source === "DIRECTORY" ? "AD / ERP" : "Local"],
+                ["Status", viewTarget.active ? (viewTarget.locked ? "Active (locked)" : "Active") : "Inactive"],
+              ].map(([label, value]) => (
+                <div key={label}>
+                  <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">{label}</p>
+                  <p className="text-sm font-medium text-slate-800">{value}</p>
+                </div>
+              ))}
+            </div>
+            <div>
+              <p className="mb-2 text-sm font-bold text-slate-800">
+                User ID created on {access.length} equipment
+                <span className="ml-2 font-medium text-slate-500">({access.filter((a) => a.status === "Active").length} active)</span>
+              </p>
+              {accessLoading ? <p className="text-sm text-slate-500">Loading...</p> : (
+                <DataTable
+                  rows={access}
+                  rowKey={(a) => `${a.equipment_code}-${a.user_id}`}
+                  emptyMessage="No user ID has been created for this user on any equipment yet."
+                  columns={[
+                    { header: "Equipment", render: (a) => <Link className="font-semibold text-brand-600" to={`/equipment/${a.equipment_code}`}>{a.equipment_code}</Link> },
+                    { header: "Name", render: (a) => a.equipment_name },
+                    { header: "User ID on system", render: (a) => <span className="font-mono text-xs">{a.user_id}</span> },
+                    { header: "Role", render: (a) => a.role },
+                    { header: "Granted", render: (a) => formatDate(a.granted_date) },
+                    { header: "Request", render: (a) => a.request_code },
+                    { header: "Status", render: (a) => <Badge tone={a.status === "Active" ? "green" : "red"}>{a.status}</Badge> },
+                  ]}
+                />
+              )}
+            </div>
+          </div>
+        )}
       </Modal>
 
       <Modal
@@ -340,8 +432,10 @@ export function UserManagementPage() {
               },
               {
                 header: "Actions",
+                noPrint: true,
                 render: (u) => (
                   <div className="flex items-center gap-1.5">
+                    <Button variant="secondary" size="sm" onClick={() => openView(u)} title="View user and the equipment where the user ID exists"><Eye size={13} /> View</Button>
                     <Button variant="secondary" size="sm" onClick={() => openEdit(u)} title="Edit user"><Pencil size={13} /> Edit</Button>
                     <Button variant="secondary" size="sm" onClick={() => handleToggleStatus(u)} title={u.active ? "Deactivate user" : "Activate user"}>
                       <Power size={13} /> {u.active ? "Deactivate" : "Activate"}
@@ -444,5 +538,6 @@ export function UserManagementPage() {
         </div>
       </Modal>
     </div>
+    </PrintReport>
   );
 }

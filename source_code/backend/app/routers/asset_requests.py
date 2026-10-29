@@ -95,39 +95,6 @@ def _plant_users(db: Session, plant: str, roles: list[str]) -> list[User]:
     return [u for u in users if plant in u.plants_list()]
 
 
-def create_linked_create_request(db: Session, eq: Equipment, user: User) -> AssetCreationRequest:
-    """Asset CREATE request for equipment registered directly in Equipment Master.
-    It goes through the normal review so the equipment can later be validated."""
-    req = AssetCreationRequest(
-        request_code=next_asset_code(db),
-        employee_id=user.employee_id,
-        employee_name=user.name,
-        employee_email=user.email,
-        system_name=eq.name,
-        system_id=eq.system_id,
-        system_type=eq.system_type,
-        make=eq.make,
-        model_name=eq.model_name,
-        application_name=eq.application_name,
-        gamp_category=eq.gamp_category,
-        department=eq.location,
-        location=eq.location,
-        usp_classification=eq.usp_classification,
-        computer_name=eq.computer_system_id,
-        plant=eq.plant,
-        request_type="CREATE",
-        equipment_code=eq.equipment_code,
-        form_data=json.dumps({"source": "equipment_master"}),
-        status=ASSET_STATUS_CREATED,
-    )
-    db.add(req)
-    db.flush()
-    _audit(db, req, user, "ASSET_REQUEST_CREATED",
-           f"Asset creation request {req.request_code} raised for new equipment {eq.equipment_code}",
-           new=ASSET_STATUS_CREATED)
-    return req
-
-
 @router.get("/selectors")
 def selectors(
     db: Session = Depends(get_db),
@@ -223,6 +190,27 @@ def create_request(
             "department": fields.get("department") or eq.location, "location": eq.location,
             "computer_name": eq.computer_system_id,
         })
+    elif eq:
+        # Creation request for equipment already registered in Equipment Master:
+        # one open / approved creation request per equipment, details default from it
+        existing = db.query(AssetCreationRequest).filter(
+            AssetCreationRequest.equipment_code == eq.equipment_code,
+            AssetCreationRequest.request_type == "CREATE",
+            AssetCreationRequest.status.in_(OPEN_STATUSES + (ASSET_STATUS_APPROVED,)),
+        ).first()
+        if existing:
+            raise HTTPException(status.HTTP_409_CONFLICT,
+                                f"Asset creation request {existing.request_code} already exists for {eq.equipment_code}")
+        plant = eq.plant
+        defaults = {
+            "system_name": eq.name, "system_id": eq.system_id, "system_type": eq.system_type,
+            "make": eq.make, "model_name": eq.model_name, "application_name": eq.application_name,
+            "gamp_category": eq.gamp_category, "usp_classification": eq.usp_classification,
+            "department": eq.location, "location": eq.location, "computer_name": eq.computer_system_id,
+        }
+        for key, value in defaults.items():
+            if not fields.get(key):
+                fields[key] = value
     elif not (payload.system_name or "").strip():
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "System name is required")
 
@@ -327,7 +315,7 @@ def qa_approve(
             location=req.department or req.location or "",
             plant=req.plant,
             allowed_roles="Analyst",
-            validation_date=req.approval_date or datetime.utcnow().date(),
+            validation_date=None,  # set when the equipment is validated
             active=True,
             created_by=current_user.name,
             system_id=req.system_id,

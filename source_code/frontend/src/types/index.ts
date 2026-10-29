@@ -33,7 +33,7 @@ export interface Equipment {
   location: string;
   plant: string;
   allowed_roles: string[];
-  validation_date: string;
+  validation_date: string | null;
   active: boolean;
   created_at: string;
   created_by: string;
@@ -95,12 +95,32 @@ export interface AccessRequest {
 }
 
 export interface EquipmentUser {
+  employee_id: string;
   user_name: string;
   department: string;
   user_id: string;
+  role: string;
   access_granted_by: string;
   granted_date: string;
+  request_code: string;
   status: string;
+}
+
+/** Equipment on which a user's ID exists (from completed requests). */
+export interface UserAccess {
+  employee_id: string;
+  user_name: string;
+  department: string | null;
+  equipment_code: string;
+  equipment_name: string;
+  equipment_active?: boolean;
+  role: string;
+  user_id: string;
+  request_code: string;
+  last_request?: string;
+  granted_by: string;
+  granted_date: string;
+  status: "Active" | "Inactive";
 }
 
 export interface AuditLog {
@@ -242,6 +262,7 @@ export interface AssetCreationRequest {
 export interface PeriodicReviewRow {
   [key: string]: unknown;
   equipment_code: string;
+  active?: boolean;
   equipment_name: string;
   system_type?: string | null;
   make?: string | null;
@@ -258,6 +279,7 @@ export interface PeriodicReviewRow {
 export interface BackupScheduleRow {
   [key: string]: unknown;
   equipment_code: string;
+  active?: boolean;
   equipment_name: string;
   system_type?: string | null;
   make?: string | null;
@@ -271,6 +293,7 @@ export interface BackupScheduleRow {
 
 export interface PMRow {
   equipment_code: string;
+  active?: boolean;
   source?: "equipment" | "additional";
   additional_id?: number;
   system_id?: string | null;

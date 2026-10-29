@@ -30,16 +30,19 @@ def _active_validated_equipment(
     plant: Optional[str] = None,
     eq_type: Optional[str] = None,
     department: Optional[str] = None,
+    include_retired: bool = False,
 ):
-    """Active, validated (not under_validation) equipment with a periodic review frequency."""
+    """Validated (not under_validation) equipment with a periodic review frequency.
+    Retired systems are listed for their history only and never planned."""
     q = (
         db.query(Equipment)
         .filter(
-            Equipment.active.is_(True),
             Equipment.periodic_review_frequency.isnot(None),
             or_(Equipment.validation_status.is_(None), Equipment.validation_status != "under_validation"),
         )
     )
+    if not include_retired:
+        q = q.filter(Equipment.active.is_(True))
     if plant:
         q = q.filter(Equipment.plant == plant)
     if eq_type:
@@ -82,6 +85,7 @@ def _build_row(eq: Equipment, entry: Optional[PeriodicReviewEntry]) -> dict:
         "notes": entry.notes if entry else None,
         "updated_by": entry.updated_by if entry else None,
         "updated_at": entry.updated_at.isoformat() if entry and entry.updated_at else None,
+        "active": eq.active,
     }
 
 
@@ -93,7 +97,8 @@ def list_periodic_review(
     current_user: User = Depends(get_current_user),
     plant: Optional[str] = Depends(get_current_plant),
 ):
-    equips = _active_validated_equipment(db, plant=plant, eq_type=type, department=department)
+    equips = _active_validated_equipment(db, plant=plant, eq_type=type, department=department,
+                                         include_retired=True)
     rows = []
     for eq in equips:
         entry = db.query(PeriodicReviewEntry).filter(
