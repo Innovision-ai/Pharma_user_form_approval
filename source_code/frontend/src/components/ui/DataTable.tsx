@@ -1,18 +1,34 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { motion } from "framer-motion";
 import { EmptyState } from "./EmptyState";
 
 export interface Column<T> { header: string; render: (row: T) => ReactNode; className?: string; /** hide this column on printed reports */ noPrint?: boolean }
 interface DataTableProps<T> {
   columns: Column<T>[]; rows: T[]; rowKey: (row: T) => string | number; emptyMessage?: string;
-  /** Scroll inside the table (sticky header, horizontal scrollbar always on screen) up to this height. */
+  /** Scroll inside the table (sticky header, horizontal scrollbar always on screen) up to this
+   *  height; "fill" sizes it to the space left below it in the window. */
   maxHeight?: string;
 }
 
 export function DataTable<T>({ columns, rows, rowKey, emptyMessage = "No records found.", maxHeight }: DataTableProps<T>) {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [fillHeight, setFillHeight] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (maxHeight !== "fill") return;
+    const measure = () => {
+      const top = wrapRef.current?.getBoundingClientRect().top ?? 0;
+      setFillHeight(Math.max(320, window.innerHeight - Math.max(top, 0) - 32));
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [maxHeight, rows.length]);
+
   if (rows.length === 0) return <EmptyState title={emptyMessage} description="Try adjusting your filters or check back later." />;
+  const height = maxHeight === "fill" ? (fillHeight ?? undefined) : maxHeight;
   return (
-    <div className={maxHeight ? "overflow-auto" : "overflow-x-auto"} style={maxHeight ? { maxHeight } : undefined}>
+    <div ref={wrapRef} className={maxHeight ? "overflow-auto" : "overflow-x-auto"} style={height ? { maxHeight: height } : undefined}>
       <table className="w-full min-w-[720px] text-left text-sm">
         <thead className="sticky top-0 z-10 bg-white/70 backdrop-blur-xl">
           <tr className="border-b border-white/30 text-[10px] uppercase tracking-[0.16em] text-slate-500">

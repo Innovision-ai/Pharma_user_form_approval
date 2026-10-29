@@ -90,7 +90,7 @@ export function AuditTrailPage() {
             rows={items}
             rowKey={(r) => `${r.timestamp}-${r.user_employee_id}-${r.action}-${r.request_code ?? "none"}`}
             emptyMessage="No audit entries match these filters."
-            maxHeight="calc(100vh - 220px)"
+            maxHeight="fill"
             columns={[
               { header: "Timestamp", render: (r) => <span className="whitespace-nowrap">{formatDateTime(r.timestamp)}</span> },
               { header: "Request", render: (r) => r.request_code ? <Badge>{r.request_code}</Badge> : <span className="text-slate-400">—</span> },
