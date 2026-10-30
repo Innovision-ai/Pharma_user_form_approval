@@ -25,7 +25,7 @@ export function PrintReport({ title, formatNo = DEFAULT_FORMAT_NO, children }: P
   return (
     <div className="print-report">
       <div className="print-only print-header">
-        <img src="/logo-company.svg" alt={COMPANY_NAME} className="print-logo" />
+        <img src="/acz-logo.png" alt={COMPANY_NAME} className="print-logo" />
         <div className="print-title">
           <p className="print-title-name">{title}</p>
           <p className="print-title-sub">Format No: {formatNo}</p>

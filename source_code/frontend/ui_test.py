@@ -74,6 +74,12 @@ def esign(page: Page, reason="UI test e-signature"):
     dlg.locator("button").filter(has_text=re.compile(r"Confirm|Sign|Submit|Approve|Save|Verify|Reject|Send|Complete|Resubmit|Execute", re.I)).last.click()
 
 
+def img_ok(page: Page, selector: str) -> bool:
+    """Image is present and actually loaded (not a broken link)."""
+    loc = page.locator(selector).first
+    return loc.count() > 0 and page.evaluate("(el) => el.complete && el.naturalWidth > 0", loc.element_handle())
+
+
 def toast_text(page: Page, expect_re: str = r".", timeout_s: float = 25) -> str:
     """Body text once `expect_re` appears (the live API can take a few seconds)."""
     end = time.time() + timeout_s
@@ -109,6 +115,10 @@ def t_login(page: Page):
     check(4, "login footer 'Powered by Air Care Zone' + copyright", "Powered by" in body and "Air Care Zone" in body and "©" in body)
     bg = page.evaluate("getComputedStyle(document.querySelector('#root > div')).backgroundImage")
     check(2, "login background image", "login-bg.svg" in bg, bg)
+    check("R3", "Qualizone logo on login page", img_ok(page, "img[src='/qualizone-logo.png']"))
+    check("R3", "ACZ logo in 'Powered by' footer", img_ok(page, "footer img[src='/acz-logo.png']"))
+    fav = page.evaluate("document.querySelector(\"link[rel='icon']\")?.getAttribute('href')")
+    check("R3", "browser tab icon + title", fav == "/favicon.png" and "Qualizone" in page.title(), (fav, page.title()))
     page.get_by_placeholder("Enter your username").fill("EMP001")
     page.wait_for_timeout(1500)
     opts = page.locator("select").first.locator("option").all_inner_texts()
@@ -131,6 +141,7 @@ def t_shell(page: Page):
                 "Periodic Review Management", "Preventive Maintenance Management", "Backup Schedule Management",
                 "Password Vault", "User Management", "Audit Trail", "Notifications"]
     check(9, "left menu order as specified", nav == expected, nav)
+    check("R3", "Qualizone logo in sidebar", img_ok(page, "aside img[src='/qualizone-icon.png']"))
     check(26, "Approver Master removed from menu", "Approver Master" not in nav)
     check(24, "selected plant shown in header", "Plant P1" in body)
     # search (row 4)
@@ -307,6 +318,7 @@ def t_inventory(page: Page):
     page.emulate_media(media="print")
     hdr = page.locator(".print-header").first
     check(37, "print header: logos, report name, format no.", hdr.is_visible() and "Format No" in hdr.inner_text(), hdr.inner_text() if hdr.count() else "")
+    check("R3", "ACZ company logo in printed report header", img_ok(page, ".print-header img[src='/acz-logo.png']"))
     ftr = page.locator(".print-footer").first.inner_text()
     check(37, "print footer: printed by + date/time", "Printed by" in ftr and DATE_RE.search(ftr) is not None, ftr)
     shot(page, "08-inventory-print")
@@ -415,12 +427,19 @@ def t_vault(page: Page):
     page.goto(f"{BASE}/vault")
     page.wait_for_load_state("networkidle")
     if page.locator("main table").count() == 0:
-        page.get_by_role("button", name=re.compile("Add entry")).click()
-        page.get_by_placeholder("EQ-001").fill("0001")
-        page.get_by_placeholder("HPLC System").fill("UI vault entry")
-        page.locator("main input[type=password]").first.fill("Secret#1")
-        page.get_by_role("button", name=re.compile("Save entry")).click()
-        page.wait_for_timeout(1500)
+        pass
+    # equipment is selected from Equipment Master, not typed in
+    page.get_by_role("button", name=re.compile("Add entry")).click()
+    sel = page.locator("select[aria-label='Equipment']")
+    sel.locator("option").nth(1).wait_for(state="attached", timeout=20000)
+    opts = sel.locator("option").all_inner_texts()
+    check("R3", "vault entry: equipment chosen from a dropdown", len(opts) > 1 and page.get_by_placeholder("EQ-001").count() == 0, opts[:4])
+    choice = sel.locator("option").nth(1).get_attribute("value")
+    sel.select_option(choice)
+    page.locator("main input[type=password]").first.fill("Secret#1")
+    page.get_by_role("button", name=re.compile("Save entry")).click()
+    saved = wait_row(page, choice, r".")
+    check("R3", "vault entry saved with selected equipment code and name", choice in saved and "·" not in saved, saved)
     heads = [h.strip().upper() for h in page.locator("main table thead th").all_inner_texts()]
     check(47, "'Created / Last Updated Date' column", any("CREATED" in h and "LAST UPDATED" in h for h in heads), heads)
     check(49, "vault search box", page.get_by_placeholder(re.compile("Search")).count() >= 1)

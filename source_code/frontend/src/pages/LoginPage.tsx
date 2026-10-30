@@ -73,16 +73,16 @@ export function LoginPage() {
       >
         <div className="glass-panel bg-white/75 p-10">
           <div className="flex flex-col items-center mb-8">
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
+            <motion.img
+              src="/qualizone-logo.png"
+              alt="Qualizone"
+              initial={{ scale: 0.6, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
               transition={{ delay: 0.2, type: "spring", stiffness: 200, damping: 20 }}
-              className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-500 to-indigo-700 text-white text-2xl font-bold shadow-lg shadow-brand-500/30"
-            >
-              QZ
-            </motion.div>
-            <h1 className="mt-6 text-3xl font-extrabold tracking-tight text-slate-900">Qualizone</h1>
-            <p className="mt-2 text-sm text-slate-500 font-medium">Equipment Access Management</p>
+              className="h-28 w-auto object-contain"
+            />
+            <h1 className="sr-only">Qualizone</h1>
+            <p className="mt-3 text-sm text-slate-500 font-medium">Equipment Access Management</p>
           </div>
 
           {notice && (
@@ -144,10 +144,12 @@ export function LoginPage() {
         </div>
       </motion.div>
 
-      <footer className="relative z-10 pb-6 text-center text-xs font-medium text-slate-500">
-        Powered by <span className="font-bold text-slate-700">Air Care Zone</span>
-        <span className="mx-2 text-slate-300">|</span>
-        © {new Date().getFullYear()} Air Care Zone. All rights reserved.
+      <footer className="relative z-10 flex flex-col items-center gap-1 pb-6 text-center text-xs font-medium text-slate-500">
+        <span className="flex items-center gap-2">
+          Powered by
+          <img src="/acz-logo.png" alt="Air Care Zone" className="h-9 w-auto object-contain" />
+        </span>
+        <span>© {new Date().getFullYear()} Air Care Zone. All rights reserved.</span>
       </footer>
     </div>
   );

@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Eye, EyeOff, Plus, Trash2, Pencil, Search } from "lucide-react";
 import { api } from "../lib/api";
-import type { VaultEntry } from "../types";
+import type { Equipment, VaultEntry } from "../types";
 import { Card, CardBody, CardHeader, CardTitle } from "../components/ui/Card";
 import { DataTable } from "../components/ui/DataTable";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
-import { Field, FieldLabel, Input } from "../components/ui/Input";
+import { Field, FieldLabel, Input, Select } from "../components/ui/Input";
 import { Modal } from "../components/ui/Modal";
 import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 import { PageHeader } from "../components/ui/PageHeader";
@@ -34,6 +34,12 @@ export function PasswordVaultPage() {
   // Add modal
   const [showAdd, setShowAdd] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Equipment is picked from Equipment Master instead of typed by hand
+  const [equipmentOptions, setEquipmentOptions] = useState<Equipment[]>([]);
+  useEffect(() => {
+    if (!showAdd) return;
+    api.listEquipment({ activeOnly: true }).then(setEquipmentOptions).catch(() => setEquipmentOptions([]));
+  }, [showAdd]);
   const [addForm, setAddForm] = useState({
     equipment_code: "", equipment_name: "",
     password: "", created_date: new Date().toISOString().split("T")[0], expiry_days: "",
@@ -139,8 +145,22 @@ export function PasswordVaultPage() {
           <CardHeader><CardTitle>New vault entry</CardTitle></CardHeader>
           <CardBody>
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field><FieldLabel>Equipment code *</FieldLabel><Input value={addForm.equipment_code} onChange={e => setAddForm(p => ({ ...p, equipment_code: e.target.value }))} placeholder="EQ-001" /></Field>
-              <Field><FieldLabel>Equipment name *</FieldLabel><Input value={addForm.equipment_name} onChange={e => setAddForm(p => ({ ...p, equipment_name: e.target.value }))} placeholder="HPLC System" /></Field>
+              <Field className="sm:col-span-2">
+                <FieldLabel>Equipment *</FieldLabel>
+                <Select
+                  aria-label="Equipment"
+                  value={addForm.equipment_code}
+                  onChange={(e) => {
+                    const eq = equipmentOptions.find((o) => o.equipment_code === e.target.value);
+                    setAddForm((p) => ({ ...p, equipment_code: eq?.equipment_code ?? "", equipment_name: eq?.name ?? "" }));
+                  }}
+                >
+                  <option value="">Select equipment</option>
+                  {equipmentOptions.map((o) => (
+                    <option key={o.equipment_code} value={o.equipment_code}>{o.equipment_code} · {o.name}</option>
+                  ))}
+                </Select>
+              </Field>
               <Field><FieldLabel>Password *</FieldLabel><Input type="password" autoComplete="new-password" value={addForm.password} onChange={e => setAddForm(p => ({ ...p, password: e.target.value }))} /></Field>
               <Field><FieldLabel>Created date</FieldLabel><Input type="date" value={addForm.created_date} onChange={e => setAddForm(p => ({ ...p, created_date: e.target.value }))} /></Field>
               <Field><FieldLabel>Expiry days (optional)</FieldLabel><Input type="number" value={addForm.expiry_days} onChange={e => setAddForm(p => ({ ...p, expiry_days: e.target.value }))} placeholder="e.g. 90" /></Field>

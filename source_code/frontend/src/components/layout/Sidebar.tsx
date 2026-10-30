@@ -71,7 +71,7 @@ export function Sidebar({ collapsed, mobileOpen, onClose, onToggle }: SidebarPro
         {/* Logo area */}
         <div className={cn("flex h-[76px] items-center border-b border-white/20 px-5", collapsed && "lg:justify-center lg:px-3")}>
           <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-indigo-700 text-sm font-extrabold text-white shadow-lg shadow-brand-500/30">QZ</div>
+            <img src="/qualizone-icon.png" alt="Qualizone" className="h-10 w-10 shrink-0 object-contain" />
             {!collapsed && <div className="min-w-0">
               <p className="truncate text-sm font-extrabold text-slate-900 tracking-tight">Qualizone</p>
               <p className="truncate text-[11px] text-slate-400 font-medium">Equipment Access Management</p>

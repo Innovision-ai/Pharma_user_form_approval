@@ -24,6 +24,10 @@ export function AboutPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <PageHeader eyebrow="Software information" title="About Qualizone" />
+      <div className="flex flex-wrap items-center justify-center gap-10 rounded-3xl border border-white/40 bg-white/70 p-6">
+        <img src="/qualizone-logo.png" alt="Qualizone" className="h-24 w-auto object-contain" />
+        <img src="/acz-logo.png" alt="Air Care Zone" className="h-16 w-auto object-contain" />
+      </div>
       <Card>
         <CardHeader><CardTitle>Product</CardTitle></CardHeader>
         <CardBody className="space-y-3">
