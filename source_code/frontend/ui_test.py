@@ -120,13 +120,16 @@ def t_login(page: Page):
     fav = page.evaluate("document.querySelector(\"link[rel='icon']\")?.getAttribute('href')")
     check("R3", "browser tab icon + title", fav == "/favicon.png" and "Qualizone" in page.title(), (fav, page.title()))
     page.get_by_placeholder("Enter your username").fill("EMP001")
-    page.wait_for_timeout(1500)
+    expect(page.locator("select").first.locator("option[value='P1']")).to_have_count(1, timeout=20000)
     opts = page.locator("select").first.locator("option").all_inner_texts()
     check(24, "plant dropdown lists the user's plants", "P1" in opts and "P2" in opts, opts)
     shot(page, "01-login")
     # a single-plant user only gets their own plant (HOD001 is P1 only)
     page.get_by_placeholder("Enter your username").fill("HOD001")
-    page.wait_for_timeout(1500)
+    page.wait_for_timeout(500)
+    # wait until EMP001's plants (P1 + P2) are replaced by HOD001's
+    expect(page.locator("select").first.locator("option[value='P2']")).to_have_count(0, timeout=20000)
+    expect(page.locator("select").first.locator("option", has_text="Checking")).to_have_count(0, timeout=20000)
     opts = page.locator("select").first.locator("option").all_inner_texts()
     check(24, "plant list restricted to the user's plants", opts == ["P1"], opts)
 
