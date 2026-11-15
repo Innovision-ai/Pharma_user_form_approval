@@ -220,3 +220,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Preview deployment config (contains the database URL; generated at deploy time)
+backend/vercel.preview.json
