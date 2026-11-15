@@ -53,6 +53,8 @@ export interface Equipment {
   computer_system_id?: string | null;
   remarks?: string | null;
   instrument_ids?: string | null;
+  hostname?: string | null;
+  ip_address?: string | null;
 }
 
 export interface Approver {
@@ -189,9 +191,46 @@ export interface UAMRequest {
   it_executor_id: string | null;
   rejection_reason: string | null;
   auth_reason?: string | null;
+  for_others?: boolean;
+  beneficiary_employee_id?: string | null;
+  beneficiary_name?: string | null;
+  beneficiary_email?: string | null;
+  beneficiary_department?: string | null;
+  training_completed?: "YES" | "NA" | null;
+  training_remark?: string | null;
+  training_attachment_id?: number | null;
+  temporary_login?: boolean;
+  temporary_days?: number | null;
+  access_expires_on?: string | null;
+  auto_deactivation_code?: string | null;
+  /** A temporary password is waiting to be shown at acknowledgement (never the value). */
+  has_temp_password?: boolean;
   created_at: string;
   updated_at: string;
 }
+
+/** Acknowledgement response: the temporary password, shown once. */
+export interface UAMAck extends UAMRequest { temporary_password?: string | null }
+
+export interface EquipmentHolder { employee_id: string; name: string; department?: string | null; user_id: string; role: string }
+
+export interface AttachmentInfo { id: number; filename: string; size: number; content_type: string }
+
+interface ScheduleHistoryBase {
+  id: number;
+  equipment_code: string;
+  frequency_months?: number | null;
+  notes?: string | null;
+  due_date?: string | null;
+  overdue?: boolean;
+  breakdown_details?: string | null;
+  deviation_no?: string | null;
+  attachment_id?: number | null;
+  performed_by: string;
+  performed_at?: string | null;
+}
+export interface PMHistory extends ScheduleHistoryBase { pm_date: string }
+export interface ReviewHistory extends ScheduleHistoryBase { review_date: string; next_due_date?: string | null }
 
 export interface UAMSelectorUser { id: string; name: string; department?: string }
 export interface UAMSelectors {
@@ -208,6 +247,9 @@ export interface UAMEquipmentOption {
   department: string;
   allowed_roles: string[];
   has_user_id: boolean;
+  computer_system_id?: string | null;
+  hostname?: string | null;
+  ip_address?: string | null;
 }
 
 export interface Plant { code: string; name: string; active: boolean; }
@@ -286,6 +328,7 @@ export interface BackupScheduleRow {
   last_backup_date?: string | null;
   next_backup_date?: string | null;
   frequency_days?: number | null;
+  frequency_hours?: number | null;
   notes?: string | null;
   updated_by?: string | null;
   updated_at?: string | null;

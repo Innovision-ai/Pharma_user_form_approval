@@ -21,6 +21,9 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 /** E-signature sent with workflow actions. */
 export interface ESign { auth_password: string; auth_reason: string }
 
+/** Required when a PM / periodic review is completed after its due date. */
+export interface OverdueDetails { breakdown_details?: string; deviation_no?: string; attachment_id?: number }
+
 export class ApiError extends Error {
   status: number;
   constructor(status: number, message: string) {
@@ -45,7 +48,8 @@ async function request<T>(
   options: RequestInit = {},
 ): Promise<T> {
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
+    // FormData (file uploads) sets its own multipart boundary
+    ...(options.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
     ...(options.headers as Record<string, string> | undefined),
   };
   if (currentToken) {
@@ -196,7 +200,12 @@ export const api = {
   // UAM workflow
   listUAMTemplates: () => request<{ templates: Array<{ code: string; asset_types: string[]; requires_qa: boolean }>; actions: string[]; folder_permissions: string[] }>("/api/uam/requests/templates"),
   getUAMSelectors: () => request<UAMSelectors>("/api/uam/requests/selectors"),
-  getUAMEquipmentOptions: () => request<UAMEquipmentOption[]>("/api/uam/requests/equipment-options"),
+  /** scope "mine": own department (normal request); "all": whole plant (request for others). */
+  getUAMEquipmentOptions: (scope: "mine" | "all" = "mine") =>
+    request<UAMEquipmentOption[]>(`/api/uam/requests/equipment-options?scope=${scope}`),
+  /** People holding an active ID on the equipment (request for others: deactivation etc.). */
+  getUAMEquipmentUsers: (equipment_code: string) =>
+    request<import("../types").EquipmentHolder[]>(`/api/uam/requests/equipment-users/${encodeURIComponent(equipment_code)}`),
   listUAMRequests: (params?: { status?: string; plant?: string }) => {
     const qs = new URLSearchParams();
     if (params?.status) qs.set("status", params.status);
@@ -210,14 +219,49 @@ export const api = {
     department_approver_id?: string; qa_approver_id?: string; it_executor_id?: string;
     form_data?: Record<string, unknown>;
     auth_password: string; auth_reason: string;
+    // Request for others
+    for_others?: boolean; beneficiary_employee_id?: string; beneficiary_name?: string;
+    beneficiary_email?: string; beneficiary_department?: string;
+    // "Are all required trainings completed?"
+    training_completed: "YES" | "NA"; training_remark?: string; training_attachment_id?: number;
+    // Temporary login (auto deactivation after 10 / 15 days)
+    temporary_login?: boolean; temporary_days?: number;
   }) => request<import("../types").UAMRequest>("/api/uam/requests", { method: "POST", body: JSON.stringify(payload) }),
+  /** Proxy user: initiator replaces an assignee (audited, e-signed). */
+  reassignUAMRequest: (code: string, stage: "reviewer" | "department_approver" | "qa_approver" | "it_executor", new_user_id: string, sig: ESign) =>
+    request<import("../types").UAMRequest>(`/api/uam/requests/${code}/reassign`, { method: "POST", body: JSON.stringify({ stage, new_user_id, ...sig }) }),
+  /** Self-service: deactivate all of the signed-in user's own access. */
+  selfDeactivate: (payload: { reason: string; reviewer_id: string; it_executor_id?: string } & ESign) =>
+    request<{ created_requests: string[]; count: number; skipped: string[] }>("/api/uam/requests/self-deactivate", { method: "POST", body: JSON.stringify(payload) }),
   // Every workflow step is e-signed: the actor's own password + a reason.
   approveUAMRequest: (code: string, sig: ESign, comment?: string) => request<import("../types").UAMRequest>(`/api/uam/requests/${code}/approve`, { method: "POST", body: JSON.stringify({ comment, ...sig }) }),
   requestUAMCorrection: (code: string, sig: ESign, comment: string) => request<import("../types").UAMRequest>(`/api/uam/requests/${code}/correction`, { method: "POST", body: JSON.stringify({ comment, ...sig }) }),
   rejectUAMRequest: (code: string, sig: ESign, comment?: string) => request<import("../types").UAMRequest>(`/api/uam/requests/${code}/reject`, { method: "POST", body: JSON.stringify({ comment, ...sig }) }),
   resubmitUAMRequest: (code: string, sig: ESign, comment?: string) => request<import("../types").UAMRequest>(`/api/uam/requests/${code}/resubmit`, { method: "POST", body: JSON.stringify({ comment, ...sig }) }),
   executeUAMRequest: (code: string, sig: ESign, user_login_id: string, password?: string, comment?: string) => request<import("../types").UAMRequest>(`/api/uam/requests/${code}/execute`, { method: "POST", body: JSON.stringify({ user_login_id, password, comment, ...sig }) }),
-  acknowledgeUAMRequest: (code: string, comment?: string) => request<import("../types").UAMRequest>(`/api/uam/requests/${code}/acknowledge`, { method: "POST", body: JSON.stringify({ comment }) }),
+  /** Returns the temporary password once (shown in a pop-up to the initiator, then wiped server-side). */
+  acknowledgeUAMRequest: (code: string, comment?: string) => request<import("../types").UAMAck>(`/api/uam/requests/${code}/acknowledge`, { method: "POST", body: JSON.stringify({ comment }) }),
+
+  // Attachments (training evidence, deviation records): PDF / images / Word / Excel, max 5 MB
+  uploadAttachment: (file: File, purpose?: string) => {
+    const form = new FormData();
+    form.append("file", file);
+    if (purpose) form.append("purpose", purpose);
+    return request<import("../types").AttachmentInfo>("/api/attachments", { method: "POST", body: form });
+  },
+  /** Downloads an attachment (needs the auth header, so it is fetched, not linked). */
+  downloadAttachment: async (id: number, filename = `attachment-${id}`) => {
+    const res = await fetch(`${BASE_URL}/api/attachments/${id}`, {
+      headers: currentToken ? { Authorization: `Bearer ${currentToken}` } : {},
+    });
+    if (!res.ok) throw new ApiError(res.status, "Could not download the attachment");
+    const disposition = res.headers.get("content-disposition") ?? "";
+    const name = /filename="?([^"]+)"?/.exec(disposition)?.[1] ?? filename;
+    const url = URL.createObjectURL(await res.blob());
+    const a = document.createElement("a");
+    a.href = url; a.download = name; a.click();
+    URL.revokeObjectURL(url);
+  },
   cancelUAMRequest: (code: string, comment?: string) => request<import("../types").UAMRequest>(`/api/uam/requests/${code}/cancel`, { method: "POST", body: JSON.stringify({ comment }) }),
   bulkDeactivateUser: (payload: { employee_id: string; it_executor_id: string; reason: string }) =>
     request<{ created_requests: string[]; count: number }>("/api/uam/requests/bulk-deactivate", { method: "POST", body: JSON.stringify(payload) }),
@@ -257,8 +301,10 @@ export const api = {
     if (department) qs.set("department", department);
     return request<PeriodicReviewRow[]>(`/api/periodic-review/planner?${qs.toString()}`);
   },
-  updateReviewDone: (code: string, last_review_date: string, notes?: string, auth_password?: string) =>
-    request<PeriodicReviewRow>(`/api/periodic-review/${code}/update-done`, { method: "PUT", body: JSON.stringify({ last_review_date, notes, auth_password }) }),
+  updateReviewDone: (code: string, last_review_date: string, notes?: string, auth_password?: string, overdue?: OverdueDetails) =>
+    request<PeriodicReviewRow>(`/api/periodic-review/${code}/update-done`, { method: "PUT", body: JSON.stringify({ last_review_date, notes, auth_password, ...overdue }) }),
+  getReviewHistory: (equipment_code: string) =>
+    request<import("../types").ReviewHistory[]>(`/api/periodic-review/history/${equipment_code}`),
 
   // Backup Schedule
   listBackupSchedule: (params?: { type?: string; department?: string; search?: string }) => {
@@ -275,12 +321,13 @@ export const api = {
     if (department) qs.set("department", department);
     return request<BackupScheduleRow[]>(`/api/backup-schedule/planner?${qs.toString()}`);
   },
-  updateBackupDone: (code: string, last_backup_date: string, frequency_days?: number, notes?: string, auth_password?: string, backup_path?: string) =>
-    request<BackupScheduleRow>(`/api/backup-schedule/${code}/update-done`, { method: "PUT", body: JSON.stringify({ last_backup_date, frequency_days: frequency_days ?? 30, notes, auth_password, backup_path }) }),
+  /** last_backup_at: ISO date-time with zone (e.g. new Date(local).toISOString()); frequency in hours. */
+  updateBackupDone: (code: string, last_backup_at: string, frequency_hours: number, notes?: string, auth_password?: string, backup_path?: string) =>
+    request<BackupScheduleRow>(`/api/backup-schedule/${code}/update-done`, { method: "PUT", body: JSON.stringify({ last_backup_at, frequency_hours, notes, auth_password, backup_path }) }),
 
   // Preventive Maintenance
-  updateAdditionalPMDone: (id: number, last_pm_date: string, frequency_months: number, notes?: string, auth_password?: string) =>
-    request<PMRow>(`/api/preventive-maintenance/additional/${id}`, { method: "PUT", body: JSON.stringify({ last_pm_date, frequency_months, notes, auth_password }) }),
+  updateAdditionalPMDone: (id: number, last_pm_date: string, frequency_months: number, notes?: string, auth_password?: string, overdue?: OverdueDetails) =>
+    request<PMRow>(`/api/preventive-maintenance/additional/${id}`, { method: "PUT", body: JSON.stringify({ last_pm_date, frequency_months, notes, auth_password, ...overdue }) }),
   listPM: (params?: { plant?: string }) => {
     const qs = new URLSearchParams();
     if (params?.plant) qs.set("plant", params.plant);
@@ -292,9 +339,9 @@ export const api = {
     return request<PMRow[]>(`/api/preventive-maintenance/planner?${qs.toString()}`);
   },
   getPMHistory: (equipment_code: string) =>
-    request<Record<string, unknown>[]>(`/api/preventive-maintenance/history/${equipment_code}`),
-  updatePMDone: (code: string, last_pm_date: string, frequency_months?: number, notes?: string, auth_password?: string) =>
-    request<PMRow>(`/api/preventive-maintenance/${code}/update-done`, { method: "PUT", body: JSON.stringify({ last_pm_date, frequency_months: frequency_months ?? 6, notes, auth_password }) }),
+    request<import("../types").PMHistory[]>(`/api/preventive-maintenance/history/${equipment_code}`),
+  updatePMDone: (code: string, last_pm_date: string, frequency_months?: number, notes?: string, auth_password?: string, overdue?: OverdueDetails) =>
+    request<PMRow>(`/api/preventive-maintenance/${code}/update-done`, { method: "PUT", body: JSON.stringify({ last_pm_date, frequency_months: frequency_months ?? 6, notes, auth_password, ...overdue }) }),
   listAdditionalPMSystems: () => request<PMRow[]>("/api/preventive-maintenance/additional"),
   createAdditionalPMSystem: (payload: Record<string, unknown>) =>
     request<PMRow>("/api/preventive-maintenance/additional", { method: "POST", body: JSON.stringify(payload) }),
