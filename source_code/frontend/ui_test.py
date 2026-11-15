@@ -194,6 +194,8 @@ def t_equipment(page: Page):
         return label.contains(hit);
     }""")
     check("R2", "Columns pop-up opens above the table", on_top)
+    picker = page.locator("label").filter(has_text=re.compile("^(Hostname|IP Address)$")).count()
+    check(104, "hostname / IP available as equipment columns", picker == 2, picker)
     page.get_by_label("Computer System ID").check()
     page.wait_for_timeout(300)
     heads2 = [h.strip().upper() for h in page.locator("main table thead th").all_inner_texts()]
@@ -207,17 +209,19 @@ def t_equipment(page: Page):
     drawer = page.locator("div.fixed.inset-0").last
     labels = [l.strip() for l in drawer.locator("span.uppercase").all_inner_texts()]
     order = [re.sub(r"^\d+\.\s*", "", l).rstrip(" *").upper() for l in labels if re.match(r"^\d+\.", l)]
-    expected = ["EQUIPMENT NAME", "TYPE", "PLANT", "APPLICATION NAME", "COMPUTER SYSTEM ID",
+    expected = ["EQUIPMENT NAME", "TYPE", "PLANT", "APPLICATION NAME", "COMPUTER SYSTEM ID", "HOSTNAME", "IP ADDRESS",
                 "INSTRUMENT / EQUIPMENT / CONNECTED INSTRUMENT IDS", "MAKE", "MODEL", "SYSTEM TYPE", "GAMP CATEGORY",
                 "USP CLASSIFICATION", "ALLOWED ROLES", "DEPARTMENT", "VALIDATION STATUS", "VALIDATION COMPLETION DATE",
                 "INITIAL VALIDATION DATE", "LATEST VALIDATION DATE", "PERIODIC REVIEW FREQ. (MONTHS)", "INCLUDE IN BACKUP", "REMARKS"]
-    check(19, "new equipment fields in the 20-field order", order == expected, order)
+    check(19, "new equipment fields in order (incl. hostname / IP)", order == expected, order)
     gamp = drawer.locator("select").nth(3).locator("option").all_inner_texts()
     check(42, "GAMP options 1,3,4,5 only", gamp == ["Category 1", "Category 3", "Category 4", "Category 5"], gamp)
     inputs = drawer.locator("input:not([type=checkbox])")
     inputs.nth(0).fill(f"UI Test HPLC {TAG}")                      # name
     drawer.locator("select").first.select_option("Instrument")       # type
     drawer.locator("input").nth(2).fill(f"CS-UI-{TAG}")             # computer system id (after app name)
+    drawer.get_by_placeholder("e.g. HPLC-QC-01").fill(f"hplc-ui-{TAG.lower()}")
+    drawer.get_by_placeholder("e.g. 10.20.1.15").fill("10.20.1.99")
     drawer.get_by_placeholder("Type a role (e.g. Analyst) and press Enter").fill("Analyst")
     drawer.get_by_placeholder("Type a role (e.g. Analyst) and press Enter").press("Enter")
     dept = drawer.locator("select").filter(has=page.locator("option", has_text="Select department"))
@@ -321,6 +325,8 @@ def t_inventory(page: Page):
     page.emulate_media(media="print")
     hdr = page.locator(".print-header").first
     check(37, "print header: logos, report name, format no.", hdr.is_visible() and "Format No" in hdr.inner_text(), hdr.inner_text() if hdr.count() else "")
+    check(87, "report header has company, product and client logo slots",
+          page.locator(".print-header img").count() >= 2, page.locator(".print-header img").count())
     check("R3", "ACZ company logo in printed report header", img_ok(page, ".print-header img[src='/acz-logo.png']"))
     ftr = page.locator(".print-footer").first.inner_text()
     check(37, "print footer: printed by + date/time", "Printed by" in ftr and DATE_RE.search(ftr) is not None, ftr)
@@ -383,7 +389,8 @@ def t_backup(page: Page):
     check(61, "backup search", page.get_by_placeholder(re.compile("Search")).count() >= 1)
     check(60, "backup filters type + department", page.locator("main select").count() >= 2)
     check(59, "backup report download", "Export" in body)
-    row = page.locator("main table tbody tr").first
+    # first row that can be updated (retired systems are listed without an Update button)
+    row = page.locator("main table tbody tr").filter(has=page.get_by_role("button", name=re.compile("^Update$"))).first
     bk_code = row.locator("td").first.inner_text().strip()
     row.get_by_role("button", name=re.compile("^Update$")).click()
     form = page.locator("div.fixed.inset-0").last
@@ -398,6 +405,7 @@ def t_backup(page: Page):
     esign(page)
     row_text = wait_row(page, bk_code, r"Backups")
     check(58, "backup path + frequency saved", "D:\\Backups\\UI" in row_text and "14" in row_text, row_text)
+    check(98, "backup frequency shown in hours", re.search(r"(?i)14\s*h", row_text) is not None, row_text)
     shot(page, "11-backup")
 
 
@@ -409,7 +417,8 @@ def t_periodic(page: Page):
     check(65, "under-validation systems not listed", "UV Spectrophotometer" not in body)
     check(68, "periodic review filters type + department", page.locator("main select").count() >= 2)
     check(67, "periodic review report download", "Export" in body)
-    row = page.locator("main table tbody tr").first
+    # first row that can be updated (retired systems are listed without an Update button)
+    row = page.locator("main table tbody tr").filter(has=page.get_by_role("button", name=re.compile("^Update$"))).first
     pr_code = row.locator("td").first.inner_text().strip()
     row.get_by_role("button", name=re.compile("^Update$")).click()
     page.locator("div.fixed.inset-0").last.get_by_role("button", name=re.compile("Save|Continue|Next")).last.click()
@@ -422,6 +431,20 @@ def t_periodic(page: Page):
     plan = page.locator("div.fixed.inset-0").last.inner_text()
     check(69, "periodic review planner monthly / yearly", "MONTH" in plan.upper() and "YEAR" in plan.upper(), plan[:200])
     check(66, "planner printable", "Print" in plan)
+    page.keyboard.press("Escape")
+    if page.locator("div.fixed.inset-0").count():
+        page.locator("div.fixed.inset-0").last.get_by_role("button", name=re.compile("Close")).last.click()
+    page.wait_for_timeout(800)
+    all_hist = page.locator("main").get_by_role("button", name=re.compile("History"))
+    mine = page.locator("main table tbody tr", has_text=pr_code).get_by_role("button", name=re.compile("History"))
+    hist_btn = mine.first if mine.count() else all_hist.first
+    check(97, "periodic review history button", all_hist.count() >= 1, f"pr_code={pr_code!r} all={all_hist.count()} mine={mine.count()} modals={page.locator('div.fixed.inset-0').count()}")
+    if hist_btn.count():
+        hist_btn.click()
+        page.wait_for_timeout(2500)
+        htxt = page.locator("div.fixed.inset-0").last.inner_text()
+        check(97, "periodic review history shows the review", DATE_RE.search(htxt) is not None, htxt[:200])
+        page.locator("div.fixed.inset-0").last.get_by_role("button", name=re.compile("Close")).last.click()
     shot(page, "12-periodic")
 
 
@@ -479,7 +502,19 @@ def t_requests(page: Page):
     ex = main.locator("select").filter(has=page.locator("option[value='ADM001']"))
     if ex.count():
         ex.first.select_option("ADM001")
-    main.locator("textarea").first.fill("UI test access request")
+    net = main.locator("[aria-label='Equipment details']").inner_text() if main.locator("[aria-label='Equipment details']").count() else ""
+    check(103, "request shows hostname / IP / CS ID of the equipment",
+          f"hplc-ui-{TAG.lower()}" in net and "10.20.1.99" in net and f"CS-UI-{TAG}" in net, net)
+    main.get_by_placeholder("Describe the business need and the requested change...").fill("UI test access request")
+    main.get_by_role("button", name=re.compile("Submit")).click()
+    page.wait_for_timeout(600)
+    check(91, "training question is mandatory", page.locator("div.fixed.inset-0").count() == 0 or "Password" not in page.locator("div.fixed.inset-0").last.inner_text())
+    if page.locator("div.fixed.inset-0").count():
+        page.keyboard.press("Escape")
+    main.locator("[role=radiogroup][aria-label='Are all required trainings completed?']").get_by_text("NA", exact=True).click()
+    main.get_by_placeholder("e.g. Read-only access, no SOP training required").fill("Read-only access")
+    tmp = main.locator("label", has_text="Temporary login")
+    check(96, "temporary login option on CREATE requests", tmp.count() >= 1)
     main.get_by_role("button", name=re.compile("Submit")).click()
     cred = page.locator("div.fixed.inset-0").last.inner_text()
     check(78, "submit asks for user ID, password and reason", all(k in cred.upper() for k in ("USER ID", "PASSWORD", "REASON")), cred[:150])
@@ -493,6 +528,12 @@ def t_requests(page: Page):
     body = page.locator("main").inner_text()
     check(77, "initiator cannot comment while request waits on reviewer", "Waiting on" in body and page.locator("main textarea").count() == 0, body[:300])
     shot(page, "13-request-submitted")
+    check(92, "initiator can change assigned users", page.get_by_role("button", name=re.compile("Change assigned user")).count() >= 1)
+    page.goto(f"{BASE}/uam/requests")
+    page.wait_for_load_state("networkidle")
+    lst = page.locator("main").inner_text()
+    check(89, "Request for others option", "Request for others" in lst)
+    check(90, "Deactivate all my access option for every user", "Deactivate all my access" in lst)
 
     login(page, "HOD001", "P1")
     page.goto(f"{BASE}/uam/requests/{req_code}")
@@ -519,7 +560,7 @@ def t_requests(page: Page):
     page.goto(f"{BASE}/uam/requests/{req_code}")
     page.wait_for_load_state("networkidle")
     main = page.locator("main")
-    main.locator("input").nth(0).fill("emp001.hplc")
+    main.get_by_placeholder("ID created on the system").fill("emp001.hplc")
     main.locator("input[type=password]").first.fill("Temp@1234")
     main.get_by_role("button", name=re.compile("Complete execution|Execute")).click()
     esign(page, "Account created")
@@ -545,7 +586,26 @@ def t_requests(page: Page):
     page.wait_for_load_state("networkidle")
     page.locator("main").get_by_role("button", name=re.compile("Acknowledge")).click()
     page.locator("div.fixed.inset-0").last.get_by_role("button", name=re.compile("Yes|Acknowledge|Confirm")).last.click()
-    toast_text(page, r"(?i)completed|closed")
+    pw = page.locator("[data-testid=temp-password]")
+    try:
+        pw.wait_for(timeout=30000)
+        shown = pw.inner_text().strip()
+    except Exception:  # noqa: BLE001
+        shown = ""
+    check(105, "temporary password shown in a pop-up at acknowledgement", shown == "Temp@1234", shown)
+    shot(page, "16b-temp-password")
+    page.locator("div.fixed.inset-0").last.get_by_role("button", name=re.compile("^Close$")).last.click()
+    # Request for others: deactivation lists the people holding an ID on the machine
+    page.goto(f"{BASE}/uam/requests/for-others")
+    page.wait_for_load_state("networkidle")
+    fo = page.locator("main")
+    fo.locator("select[aria-label='Equipment']").select_option(code)
+    fo.locator("select[aria-label='Action']").select_option("DEACTIVATE")
+    page.wait_for_timeout(2500)
+    users_opts = fo.locator("select[aria-label='Beneficiary user'] option").all_inner_texts() if fo.locator("select[aria-label='Beneficiary user']").count() else []
+    check(95, "request for others: users holding an ID on the machine are listed",
+          any("EMP001" in o or "Yash" in o for o in users_opts), users_opts)
+    shot(page, "16c-request-for-others")
     login(page, "ADM001", "P1")
     page.goto(f"{BASE}/equipment/{code}")
     page.wait_for_load_state("networkidle")
