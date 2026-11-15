@@ -3,6 +3,7 @@ from datetime import date, timedelta
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from app.timeutil import local_today
 from app.constants import (
     STATUS_IT_COMPLETED, STATUS_IT_PENDING, STATUS_PENDING_HOD, STATUS_PENDING_QA,
     UAM_STATUS_CORRECTION, UAM_STATUS_PENDING_ACK, UAM_STATUS_PENDING_DEPARTMENT,
@@ -70,7 +71,7 @@ def get_summary(
     )
 
     # Validation alerts
-    threshold = date.today() - timedelta(days=60)
+    threshold = local_today() - timedelta(days=60)
     validation_alerts = (
         eq_q.filter(Equipment.validation_status == "under_validation", Equipment.active.is_(True))
         .count()

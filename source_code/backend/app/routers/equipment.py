@@ -4,6 +4,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.timeutil import local_today
 from app.database import get_db
 from app.deps import get_current_user, get_optional_plant, require_role
 from app.constants import ROLE_ADMIN, ASSET_STATUS_APPROVED
@@ -56,8 +57,8 @@ def validation_alerts(
     items = q.all()
     alerts = []
     for item in items:
-        created = item.created_at.date() if item.created_at else date.today()
-        days_since = (date.today() - created).days
+        created = item.created_at.date() if item.created_at else local_today()
+        days_since = (local_today() - created).days
         if days_since >= 60:
             alerts.append({
                 "equipment_code": item.equipment_code,

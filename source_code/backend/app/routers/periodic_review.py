@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+from app.timeutil import local_today
 from app.database import get_db
 from app.deps import get_current_user, get_current_plant, verify_current_password
 from app.models import Equipment, PeriodicReviewEntry, PeriodicReviewHistory, User
@@ -122,7 +123,7 @@ def list_due(
     current_user: User = Depends(get_current_user),
     plant: Optional[str] = Depends(get_current_plant),
 ):
-    due_threshold = date.today() + timedelta(days=30)
+    due_threshold = local_today() + timedelta(days=30)
     equips = _active_validated_equipment(db, plant=plant)
     rows = []
     for eq in equips:

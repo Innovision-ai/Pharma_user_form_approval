@@ -14,6 +14,7 @@ from dateutil.relativedelta import relativedelta
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.timeutil import local_today
 from app.models import Attachment, Equipment, Notification, PeriodicReviewEntry, PreventiveMaintenanceEntry
 
 PM_REMINDER_DAYS = 15
@@ -36,7 +37,7 @@ def first_periodic_review_due(eq: Equipment) -> Optional[date]:
 
 
 def require_not_future(done: date, label: str = "Done date") -> None:
-    if done > date.today():
+    if done > local_today():
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"{label} cannot be later than today")
 
 
@@ -60,7 +61,7 @@ def require_not_future_dt(done_utc: datetime, label: str = "Backup date/time") -
 def overdue_details(db: Session, payload: dict, due: Optional[date]) -> dict:
     """If the task is past its due date, Breakdown/QMS details and a deviation
     number are mandatory before it can be completed. Returns the fields to store."""
-    is_overdue = bool(due and date.today() > due)
+    is_overdue = bool(due and local_today() > due)
     details = (payload.get("breakdown_details") or "").strip()
     deviation = (payload.get("deviation_no") or "").strip()
     attachment_id = payload.get("attachment_id")
@@ -94,7 +95,7 @@ def _notify_once(db: Session, code: str, ntype: str, subject: str, body: str) ->
 
 def sweep_schedule_notifications(db: Session) -> int:
     """Raise PM (15 days) and periodic review (90 days) due reminders once per due date."""
-    today = date.today()
+    today = local_today()
     raised = 0
     pm_window = today + timedelta(days=PM_REMINDER_DAYS)
     for entry, eq in (

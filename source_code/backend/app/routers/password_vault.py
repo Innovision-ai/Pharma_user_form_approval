@@ -13,6 +13,7 @@ from cryptography.fernet import Fernet, InvalidToken
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.timeutil import local_today
 from app.config import VAULT_ENCRYPTION_KEY
 from app.database import get_db
 from app.deps import get_current_user
@@ -56,7 +57,7 @@ def _maybe_notify(db: Session, entry: PasswordVaultEntry, user: User) -> None:
     """Create a Notification row if entry expires within EXPIRY_WARN_DAYS and one doesn't exist yet."""
     if not entry.expiry_date:
         return
-    days_left = (entry.expiry_date - date.today()).days
+    days_left = (entry.expiry_date - local_today()).days
     if days_left > EXPIRY_WARN_DAYS or days_left < 0:
         return
 
@@ -96,11 +97,11 @@ def _maybe_notify(db: Session, entry: PasswordVaultEntry, user: User) -> None:
 def sweep_expiry_notifications(db: Session) -> int:
     """Raise the 10-day expiry notification for every owner's entries (run on
     dashboard / notification loads so it does not depend on opening the vault)."""
-    soon = date.today() + timedelta(days=EXPIRY_WARN_DAYS)
+    soon = local_today() + timedelta(days=EXPIRY_WARN_DAYS)
     entries = db.query(PasswordVaultEntry).filter(
         PasswordVaultEntry.expiry_date.isnot(None),
         PasswordVaultEntry.expiry_date <= soon,
-        PasswordVaultEntry.expiry_date >= date.today(),
+        PasswordVaultEntry.expiry_date >= local_today(),
     ).all()
     owners = {u.employee_id: u for u in db.query(User).filter(
         User.employee_id.in_({e.owner_employee_id for e in entries})).all()} if entries else {}
@@ -147,7 +148,7 @@ def list_entries(
         out = _with_password(entry)
         # Annotate expiry flag
         if entry.expiry_date:
-            days_left = (entry.expiry_date - date.today()).days
+            days_left = (entry.expiry_date - local_today()).days
             if days_left < 0:
                 out.expiry_flag = "expired"
             elif days_left <= EXPIRY_WARN_DAYS:
@@ -203,7 +204,7 @@ def update_entry(
 
     # Update password and reset the creation/last-updated date to today
     entry.encrypted_password = _encrypt(payload.password)
-    entry.created_date = date.today()
+    entry.created_date = local_today()
     _resolve_notifications(db, entry)
     entry.expiry_days = payload.expiry_days
     if payload.expiry_days:

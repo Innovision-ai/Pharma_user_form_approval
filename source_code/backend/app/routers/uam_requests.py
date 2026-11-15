@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.timeutil import local_today
 from app.access import user_access
 from app.constants import (
     ROLE_ADMIN, ROLE_EMPLOYEE, ROLE_HOD, ROLE_IT, ROLE_QA,
@@ -255,7 +256,7 @@ def equipment_users(
 
 def sweep_temporary_logins(db: Session) -> list[str]:
     """Raise a DEACTIVATE request for every temporary login whose period ended."""
-    today = date.today()
+    today = local_today()
     expired = db.query(UAMRequest).filter(
         UAMRequest.status == UAM_STATUS_COMPLETED,
         UAMRequest.temporary_login.is_(True),
@@ -651,7 +652,7 @@ def acknowledge(code: str, payload: UAMAction, db: Session = Depends(get_db), cu
     old = req.status
     req.status = UAM_STATUS_COMPLETED
     if req.temporary_login and req.temporary_days and req.action in GRANTING_ACTIONS:
-        req.access_expires_on = date.today() + timedelta(days=req.temporary_days)
+        req.access_expires_on = local_today() + timedelta(days=req.temporary_days)
     temp_password = None
     if req.temp_password_enc:
         _, decrypt = _vault()
