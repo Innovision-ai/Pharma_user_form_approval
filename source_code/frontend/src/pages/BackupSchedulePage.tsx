@@ -12,7 +12,7 @@ import { Field, FieldLabel, Input, Select, Textarea } from "../components/ui/Inp
 import { CredentialsDialog } from "../components/ui/CredentialsDialog";
 import { PageHeader } from "../components/ui/PageHeader";
 import { useToast } from "../components/ui/Toast";
-import { formatDate } from "../lib/format";
+import { formatDateTime } from "../lib/format";
 import { PrintReport, downloadCsv, printReport } from "../components/PrintReport";
 
 const TYPE_OPTIONS = ["Hardware", "Software", "Instrument", "Equipment"];
@@ -20,10 +20,21 @@ const MONTHS = ["January", "February", "March", "April", "May", "June", "July", 
 const today = () => new Date().toISOString().split("T")[0];
 const str = (v: unknown) => (v == null ? "" : String(v));
 
-const CSV_HEADERS = ["Code", "System Name", "Type", "Department", "Computer System ID", "Frequency (days)", "Backup Path", "Updated By"];
+/** Current local time as a datetime-local value (YYYY-MM-DDTHH:mm). */
+function nowLocal() {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** Backup frequency in hours (older rows only carried whole days). */
+const freqHours = (r: BackupScheduleRow) => r.frequency_hours ?? (r.frequency_days ?? 30) * 24;
+const freqLabel = (h: number) => `Every ${h} hour${h === 1 ? "" : "s"}${h >= 24 && h % 24 === 0 ? ` (${h / 24} day${h === 24 ? "" : "s"})` : ""}`;
+
+const CSV_HEADERS = ["Code", "System Name", "Type", "Department", "Computer System ID", "Frequency (hours)", "Backup Path", "Updated By"];
 const csvRow = (r: BackupScheduleRow) => [
   r.equipment_code, r.equipment_name, str(r.type), str(r.department), str(r.computer_system_id),
-  str(r.frequency_days ?? 30), str(r.backup_path), str(r.updated_by),
+  str(freqHours(r)), str(r.backup_path), str(r.updated_by),
 ];
 
 export function BackupSchedulePage() {
@@ -37,9 +48,9 @@ export function BackupSchedulePage() {
   const [filters, setFilters] = useState({ type: "", department: "" });
   const [departments, setDepartments] = useState<string[]>([]);
 
-  // Mark done
+  // Update (backup done)
   const [target, setTarget] = useState<BackupScheduleRow | null>(null);
-  const [form, setForm] = useState({ date: today(), freq: "30", path: "", notes: "" });
+  const [form, setForm] = useState({ at: nowLocal(), freq: "720", path: "", notes: "" });
   const [credOpen, setCredOpen] = useState(false);
 
   // Planner
@@ -73,12 +84,22 @@ export function BackupSchedulePage() {
 
   const openDone = (row: BackupScheduleRow) => {
     setTarget(row);
-    setForm({ date: today(), freq: str(row.frequency_days ?? 30), path: str(row.backup_path), notes: "" });
+    setForm({ at: nowLocal(), freq: str(freqHours(row)), path: str(row.backup_path), notes: "" });
+  };
+
+  const startSign = () => {
+    if (!form.at) return showToast("Enter the backup date and time", "error");
+    if (new Date(form.at).getTime() > Date.now() + 60_000) return showToast("Backup date/time cannot be in the future", "error");
+    const hours = parseInt(form.freq);
+    if (!hours || hours < 1) return showToast("Enter the backup frequency in hours", "error");
+    setCredOpen(true);
   };
 
   const confirmDone = async ({ password }: { password: string; reason: string }) => {
     if (!target) return;
-    await api.updateBackupDone(target.equipment_code, form.date, parseInt(form.freq) || 30, form.notes || undefined, password, form.path);
+    await api.updateBackupDone(
+      target.equipment_code, new Date(form.at).toISOString(), parseInt(form.freq), form.notes || undefined, password, form.path,
+    );
     setCredOpen(false);
     setTarget(null);
     showToast("Backup schedule updated.");
@@ -110,7 +131,7 @@ export function BackupSchedulePage() {
     { header: "Type", render: (r) => r.type ? <Badge>{str(r.type)}</Badge> : <span className="text-slate-400">—</span> },
     { header: "Department", render: (r) => str(r.department) || "—" },
     { header: "Computer System ID", render: (r) => str(r.computer_system_id) || "—" },
-    { header: "Frequency", render: (r) => <span className="text-sm text-slate-600">{str(r.frequency_days ?? 30)} days</span> },
+    { header: "Frequency", render: (r) => <span className="text-sm text-slate-600">{freqLabel(freqHours(r))}</span> },
     { header: "Backup Path", render: (r) => r.backup_path ? <span className="font-mono text-xs text-slate-700">{str(r.backup_path)}</span> : <span className="text-slate-400">—</span> },
   ];
   const columns: Column<BackupScheduleRow>[] = [
@@ -127,13 +148,20 @@ export function BackupSchedulePage() {
   ];
 
   return (
-    <PrintReport title={printMode === "planner" ? `Backup Planner – ${plannerPeriod}` : "Backup Schedule Report"}>
+    <PrintReport
+      title={printMode === "planner" ? `Backup Planner – ${plannerPeriod}` : "Backup Schedule Report"}
+      filters={{
+        Type: filters.type, Department: filters.department,
+        Search: printMode === "list" ? search : undefined,
+        Period: printMode === "planner" ? plannerPeriod : undefined,
+      }}
+    >
       <div className="space-y-6">
         <div className="no-print">
           <PageHeader
             eyebrow="Operations"
             title="Backup Schedule"
-            description="Systems with backup enabled. Retired systems stay listed for history but are not part of the planner."
+            description="Systems with backup enabled; frequency is set in hours. Retired systems stay listed for history but are not part of the planner."
             actions={
               <div className="flex flex-wrap gap-2">
                 <Button variant="secondary" onClick={() => { setPlannerOpen(true); void loadPlanner(); }}><Calendar size={15} /> Planner</Button>
@@ -175,20 +203,23 @@ export function BackupSchedulePage() {
 
       <Modal
         open={!!target && !credOpen}
-        title={`Mark backup done — ${target?.equipment_name ?? ""}`}
+        title={`Update backup — ${target?.equipment_name ?? ""}`}
         onClose={() => setTarget(null)}
         footer={
           <>
             <Button variant="secondary" onClick={() => setTarget(null)}>Cancel</Button>
-            <Button onClick={() => { if (!form.date) return showToast("Enter the backup date", "error"); setCredOpen(true); }}>Save</Button>
+            <Button onClick={startSign}>Save</Button>
           </>
         }
       >
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field><FieldLabel>Backup Date *</FieldLabel><Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></Field>
-            <Field><FieldLabel>Frequency (days)</FieldLabel><Input type="number" min={1} value={form.freq} onChange={(e) => setForm({ ...form, freq: e.target.value })} /></Field>
+            <Field><FieldLabel>Backup Date &amp; Time *</FieldLabel><Input type="datetime-local" max={nowLocal()} value={form.at} onChange={(e) => setForm({ ...form, at: e.target.value })} /></Field>
+            <Field><FieldLabel>Frequency (hours) *</FieldLabel><Input type="number" min={1} value={form.freq} onChange={(e) => setForm({ ...form, freq: e.target.value })} /></Field>
           </div>
+          <p className="text-xs text-slate-500">
+            Next backup = this date/time + {form.freq || "?"} hours. The backup time cannot be in the future. (24 h = daily, 168 h = weekly.)
+          </p>
           <Field><FieldLabel>Backup Path / Data Backup Path</FieldLabel><Input value={form.path} onChange={(e) => setForm({ ...form, path: e.target.value })} placeholder="e.g. \\backup-server\HPLC01" /></Field>
           <Field><FieldLabel>Notes</FieldLabel><Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Optional notes..." /></Field>
         </div>
@@ -196,7 +227,7 @@ export function BackupSchedulePage() {
       <CredentialsDialog
         open={credOpen}
         title="E-Signature: Confirm Backup"
-        description={`Record backup for ${target?.equipment_name ?? ""} on ${formatDate(form.date)}.`}
+        description={`Record backup for ${target?.equipment_name ?? ""} at ${form.at ? formatDateTime(new Date(form.at)) : ""}.`}
         requireReason
         confirmLabel="Sign & save"
         onConfirm={confirmDone}

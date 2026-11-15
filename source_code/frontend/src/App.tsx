@@ -51,6 +51,7 @@ export function App() {
 
             <Route path="/uam/requests" element={<UAMRequestsPage />} />
             <Route path="/uam/requests/new" element={<RequireRole roles={["EMPLOYEE", "ADMIN"]}><CreateUAMRequestPage /></RequireRole>} />
+            <Route path="/uam/requests/for-others" element={<RequireRole roles={["EMPLOYEE", "ADMIN"]}><CreateUAMRequestPage key="for-others" forOthers /></RequireRole>} />
             <Route path="/uam/requests/:code" element={<UAMRequestDetailPage />} />
 
             <Route path="/asset-requests" element={<AssetRequestsPage />} />

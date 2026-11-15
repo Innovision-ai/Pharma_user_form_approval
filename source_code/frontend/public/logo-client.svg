@@ -1,1 +1,6 @@
-﻿<svg xmlns="http://www.w3.org/2000/svg" width="220" height="64" viewBox="0 0 220 64"><rect x="6" y="6" width="208" height="52" rx="10" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2" stroke-dasharray="6 4"/><text x="110" y="30" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="16" font-weight="700" fill="#475569">CLIENT LOGO</text><text x="110" y="47" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="10" fill="#94a3b8">replace public/logo-client.svg</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="60" viewBox="0 0 200 60" role="img" aria-label="Client logo">
+  <rect x="2" y="2" width="196" height="56" rx="12" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+  <circle cx="34" cy="30" r="12" fill="none" stroke="#94a3b8" stroke-width="2"/>
+  <path d="M28 30h12M34 24v12" stroke="#94a3b8" stroke-width="2" stroke-linecap="round"/>
+  <text x="118" y="35" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="15" font-weight="700" fill="#64748b" letter-spacing="1.5">CLIENT LOGO</text>
+</svg>

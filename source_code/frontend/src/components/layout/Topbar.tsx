@@ -14,7 +14,7 @@ const ROLE_TONE: Record<string, "blue" | "amber" | "purple" | "green" | "slate">
 const TITLES: Record<string, string> = {
   "/dashboard": "Dashboard", "/equipment": "Equipment Master", "/users": "User Management", "/inventory": "Inventory Report",
   "/requests/new": "Create Access Request", "/requests/mine": "My Requests", "/approvals": "Approval Inbox", "/it-queue": "IT Provisioning",
-  "/audit": "Audit Trail", "/notifications": "Notifications", "/uam/requests": "Requests", "/uam/requests/new": "Create Request",
+  "/audit": "Audit Trail", "/notifications": "Notifications", "/uam/requests": "Requests", "/uam/requests/new": "Create Request", "/uam/requests/for-others": "Request for Others",
   "/asset-requests": "Asset Requests", "/asset-requests/new": "New Asset Request", "/periodic-review": "Periodic Review Management",
   "/preventive-maintenance": "Preventive Maintenance Management", "/backup-schedule": "Backup Schedule Management",
   "/vault": "Password Vault", "/about": "About",

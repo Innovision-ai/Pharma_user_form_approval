@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, type ESign } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
-import { formatDateTime } from "../lib/format";
+import { formatDate, formatDateTime } from "../lib/format";
 import type { AuditLog, UAMRequest } from "../types";
 import { Card, CardBody, CardHeader, CardTitle } from "../components/ui/Card";
 import { StatusBadge, statusLabel } from "../components/StatusBadge";
@@ -12,6 +12,9 @@ import { Field, FieldLabel, Input, Textarea } from "../components/ui/Input";
 import { CredentialsDialog } from "../components/ui/CredentialsDialog";
 import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 import { useToast } from "../components/ui/Toast";
+import { EquipmentNetworkInfo } from "../components/requests/EquipmentNetworkInfo";
+import { ReassignDialog, STAGE_LABELS, currentAssignee, reassignableStages, type ReassignStage } from "../components/requests/ReassignDialog";
+import { TempPasswordDialog } from "../components/requests/TempPasswordDialog";
 import { TEMPLATE_LABELS } from "./UAMRequestsPage";
 
 type SignedAction = "approve" | "correction" | "reject" | "resubmit" | "execute";
@@ -72,6 +75,8 @@ export function UAMRequestDetailPage() {
   const [signing, setSigning] = useState<SignedAction | null>(null);
   const [confirm, setConfirm] = useState<"acknowledge" | "cancel" | null>(null);
   const [busy, setBusy] = useState(false);
+  const [reassignStage, setReassignStage] = useState<ReassignStage | null>(null);
+  const [revealed, setRevealed] = useState<{ password: string; userId?: string | null } | null>(null);
 
   const load = useCallback(() => {
     if (!code) return;
@@ -94,12 +99,19 @@ export function UAMRequestDetailPage() {
   const folderPath = request.form_data?.folder_path as string | undefined;
   const assetName = request.form_data?.asset_name as string | undefined;
   const loginId = request.form_data?.user_login_id as string | undefined;
+  const autoFrom = request.form_data?.auto_generated_from as string | undefined;
+  const fd = request.form_data as Record<string, unknown>;
+  // New account requested for someone else: IT shares the password verbally
+  const verbalPassword = !!request.for_others && request.action === "CREATE";
+  const passwordNeeded = NEEDS_PASSWORD.includes(request.action) && !verbalPassword;
+  const canReassign = !CLOSED.includes(s) && (isInitiator || currentUser?.role === "ADMIN");
+  const stages = canReassign ? reassignableStages(request) : [];
 
   const openSign = (a: SignedAction) => {
     if (a === "correction" && !comment.trim()) return showToast("A comment is required to send back for correction.", "error");
     if (a === "execute") {
       if (!userId.trim()) return showToast("Enter the user ID created on the system.", "error");
-      if (NEEDS_PASSWORD.includes(request.action) && !tempPassword) return showToast("Enter the temporary password.", "error");
+      if (passwordNeeded && !tempPassword) return showToast("Enter the temporary password.", "error");
     }
     setSigning(a);
   };
@@ -114,7 +126,7 @@ export function UAMRequestDetailPage() {
       correction: () => api.requestUAMCorrection(rc, sig, comment.trim()),
       reject: () => api.rejectUAMRequest(rc, sig, c),
       resubmit: () => api.resubmitUAMRequest(rc, sig, c),
-      execute: () => api.executeUAMRequest(rc, sig, userId.trim(), tempPassword || undefined, c),
+      execute: () => api.executeUAMRequest(rc, sig, userId.trim(), passwordNeeded ? tempPassword || undefined : undefined, c),
     };
     await calls[signing]();
     showToast({ approve: "Request approved.", correction: "Sent back for correction.", reject: "Request rejected.", resubmit: "Request resubmitted.", execute: "Execution recorded." }[signing]);
@@ -126,8 +138,14 @@ export function UAMRequestDetailPage() {
     if (!confirm) return;
     setBusy(true);
     try {
-      if (confirm === "acknowledge") await api.acknowledgeUAMRequest(request.request_code, comment.trim() || undefined);
-      else await api.cancelUAMRequest(request.request_code, comment.trim() || undefined);
+      if (confirm === "acknowledge") {
+        const ack = await api.acknowledgeUAMRequest(request.request_code, comment.trim() || undefined);
+        if (ack.temporary_password) {
+          setRevealed({ password: ack.temporary_password, userId: (ack.form_data?.user_login_id as string | undefined) ?? loginId });
+        }
+      } else {
+        await api.cancelUAMRequest(request.request_code, comment.trim() || undefined);
+      }
       showToast(confirm === "acknowledge" ? "Request acknowledged and closed." : "Request cancelled.");
       setConfirm(null); setComment(""); load();
     } catch (e) {
@@ -146,6 +164,23 @@ export function UAMRequestDetailPage() {
         <StatusBadge status={s} />
       </div>
 
+      {autoFrom && (
+        <div className="rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-800">
+          Raised automatically by the system: the temporary login from{" "}
+          <Link className="font-semibold underline" to={`/uam/requests/${autoFrom}`}>{autoFrom}</Link> expired.
+        </div>
+      )}
+      {request.auto_deactivation_code && request.auto_deactivation_code !== "N/A" && (
+        <div className="rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-800">
+          Temporary login expired — deactivation request{" "}
+          <Link className="font-semibold underline" to={`/uam/requests/${request.auto_deactivation_code}`}>{request.auto_deactivation_code}</Link> was raised automatically.
+        </div>
+      )}
+      {s === "PENDING_INITIATOR_ACK" && request.has_temp_password && isInitiator && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          IT has set a temporary password. It is not sent by email — it will be shown to you once when you acknowledge this request.
+        </div>
+      )}
       {request.rejection_reason && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <span className="font-semibold">{s === "REJECTED" ? "Rejection reason: " : "Correction required: "}</span>
@@ -171,11 +206,52 @@ export function UAMRequestDetailPage() {
             <Info label="Created" value={formatDateTime(request.created_at)} />
             {loginId && <Info label="User ID created" value={loginId} />}
             {request.auth_reason && <Info label="Last e-signature reason" value={request.auth_reason} />}
+            {request.for_others && (
+              <Info
+                label="Requested for"
+                value={`${request.beneficiary_name ?? ""} (${request.beneficiary_employee_id ?? ""})${request.beneficiary_department ? ` · ${request.beneficiary_department}` : ""}`}
+              />
+            )}
+            {request.for_others && request.beneficiary_email && <Info label="Email" value={request.beneficiary_email} />}
+            {request.temporary_login && (
+              <Info
+                label="Temporary login"
+                value={request.access_expires_on
+                  ? `${request.temporary_days} days — expires ${formatDate(request.access_expires_on)}`
+                  : `${request.temporary_days} days (from acknowledgement)`}
+              />
+            )}
           </div>
+          {request.asset_type !== "FOLDER" && (fd.computer_system_id || fd.hostname || fd.ip_address) ? (
+            <div className="mt-4">
+              <EquipmentNetworkInfo
+                csid={fd.computer_system_id as string | null}
+                hostname={fd.hostname as string | null}
+                ip={fd.ip_address as string | null}
+              />
+            </div>
+          ) : null}
           <div className="mt-4">
             <p className="text-xs font-medium text-slate-500">Reason</p>
             <p className="text-sm text-slate-800">{request.reason}</p>
           </div>
+          {request.training_completed && (
+            <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-3 text-sm">
+              <span className="text-slate-600">All required trainings completed:</span>
+              <Badge tone={request.training_completed === "YES" ? "green" : "amber"}>{request.training_completed === "YES" ? "Yes" : "NA"}</Badge>
+              {request.training_remark && <span className="text-slate-700">— {request.training_remark}</span>}
+              {request.training_attachment_id != null && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => api.downloadAttachment(request.training_attachment_id as number, "training-record")
+                    .catch((e) => showToast(e instanceof Error ? e.message : "Download failed", "error"))}
+                >
+                  Download training record
+                </Button>
+              )}
+            </div>
+          )}
         </CardBody>
       </Card>
 
@@ -193,10 +269,17 @@ export function UAMRequestDetailPage() {
                   <FieldLabel>User ID *</FieldLabel>
                   <Input value={userId} onChange={(e) => setUserId(e.target.value)} placeholder="ID created on the system" />
                 </Field>
-                <Field>
-                  <FieldLabel>Temporary password{NEEDS_PASSWORD.includes(request.action) ? " *" : " (not required)"}</FieldLabel>
-                  <Input type="password" autoComplete="new-password" value={tempPassword} onChange={(e) => setTempPassword(e.target.value)} disabled={!NEEDS_PASSWORD.includes(request.action)} />
-                </Field>
+                {verbalPassword ? (
+                  <div className="self-end rounded-lg bg-slate-100 px-3 py-3 text-sm text-slate-700">
+                    New user requested by someone else: <strong>password will be shared verbally</strong>.
+                  </div>
+                ) : (
+                  <Field>
+                    <FieldLabel>Temporary password{passwordNeeded ? " *" : " (not required)"}</FieldLabel>
+                    <Input type="password" autoComplete="new-password" value={tempPassword} onChange={(e) => setTempPassword(e.target.value)} disabled={!passwordNeeded} />
+                    {passwordNeeded && <p className="mt-1 text-xs text-slate-500">Not emailed — shown once to the initiator at acknowledgement.</p>}
+                  </Field>
+                )}
               </div>
             )}
             <div className="flex flex-wrap justify-end gap-2">
@@ -228,6 +311,26 @@ export function UAMRequestDetailPage() {
           </span>
           {canCancel && <Button variant="danger" size="sm" onClick={() => setConfirm("cancel")}>Cancel request</Button>}
         </div>
+      )}
+
+      {stages.length > 0 && (
+        <Card>
+          <CardHeader><CardTitle>Assigned users</CardTitle></CardHeader>
+          <CardBody>
+            <p className="mb-3 text-sm text-slate-600">If an assigned user is absent you can hand the step to someone else. Changes are recorded in the audit trail.</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {stages.map((st) => (
+                <div key={st} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-4 py-3">
+                  <div>
+                    <p className="text-xs font-medium text-slate-500">{STAGE_LABELS[st]}</p>
+                    <p className="text-sm font-semibold text-slate-800">{currentAssignee(request, st) ?? "Not assigned"}</p>
+                  </div>
+                  <Button variant="secondary" size="sm" onClick={() => setReassignStage(st)}>Change assigned user</Button>
+                </div>
+              ))}
+            </div>
+          </CardBody>
+        </Card>
       )}
 
       <Card>
@@ -263,6 +366,13 @@ export function UAMRequestDetailPage() {
         onConfirm={doSigned}
         onClose={() => setSigning(null)}
       />
+      <ReassignDialog
+        request={request}
+        stage={reassignStage}
+        onClose={() => setReassignStage(null)}
+        onDone={() => { setReassignStage(null); showToast("Assigned user changed."); load(); }}
+      />
+      <TempPasswordDialog password={revealed?.password ?? null} userId={revealed?.userId} onClose={() => setRevealed(null)} />
       <ConfirmDialog
         open={confirm !== null}
         title={confirm === "acknowledge" ? "Acknowledge request?" : "Cancel request?"}

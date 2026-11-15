@@ -15,9 +15,14 @@ import { PageHeader } from "../components/ui/PageHeader";
 import { useToast } from "../components/ui/Toast";
 import { formatDate, formatDateTime } from "../lib/format";
 import { PrintReport, downloadCsv, printReport } from "../components/PrintReport";
+import {
+  OverdueFields, OverdueInfo, emptyOverdue, isPastDue, overdueError, toOverdueDetails, todayLocal,
+  type OverdueState,
+} from "../components/schedule/OverdueFields";
+import type { PMHistory } from "../types";
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-const today = () => new Date().toISOString().split("T")[0];
+const today = todayLocal;
 
 /** Days from today to a YYYY-MM-DD date, using local dates (no timezone shift). */
 function daysUntil(date: string) {
@@ -36,7 +41,6 @@ function DueBadge({ date }: { date?: string | null }) {
   return <span className="text-sm text-slate-600">{formatDate(date)}</span>;
 }
 
-interface HistoryRow { id: number; pm_date: string | null; frequency_months: number; notes: string | null; performed_by: string; performed_at: string | null }
 
 const csvRow = (r: PMRow) => [
   r.equipment_code, r.equipment_name, r.computer_system_id ?? "", r.system_id ?? "", r.department ?? "",
@@ -59,10 +63,12 @@ export function PreventiveMaintenancePage() {
   const [doneTarget, setDoneTarget] = useState<PMRow | null>(null);
   const [doneForm, setDoneForm] = useState({ date: today(), freq: "6", notes: "" });
   const [credOpen, setCredOpen] = useState(false);
+  const [overdue, setOverdue] = useState<OverdueState>(emptyOverdue());
+  const doneIsOverdue = doneTarget?.active !== false && isPastDue(doneTarget?.next_pm_date);
 
   // History
   const [historyTarget, setHistoryTarget] = useState<PMRow | null>(null);
-  const [history, setHistory] = useState<HistoryRow[]>([]);
+  const [history, setHistory] = useState<PMHistory[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
   // Additional systems
@@ -105,15 +111,27 @@ export function PreventiveMaintenancePage() {
   const openDone = (row: PMRow) => {
     setDoneTarget(row);
     setDoneForm({ date: today(), freq: String(row.frequency_months ?? 6), notes: "" });
+    setOverdue(emptyOverdue());
+  };
+
+  const startSign = () => {
+    if (!doneForm.date) return showToast("Enter the PM date", "error");
+    if (doneForm.date > today()) return showToast("PM date cannot be later than today", "error");
+    if (doneIsOverdue) {
+      const err = overdueError(overdue);
+      if (err) return showToast(err, "error");
+    }
+    setCredOpen(true);
   };
 
   const confirmDone = async ({ password }: { password: string; reason: string }) => {
     if (!doneTarget) return;
     const freq = parseInt(doneForm.freq) || 6;
+    const extra = doneIsOverdue ? toOverdueDetails(overdue) : undefined;
     if (doneTarget.source === "additional" && doneTarget.additional_id != null) {
-      await api.updateAdditionalPMDone(doneTarget.additional_id, doneForm.date, freq, doneForm.notes || undefined, password);
+      await api.updateAdditionalPMDone(doneTarget.additional_id, doneForm.date, freq, doneForm.notes || undefined, password, extra);
     } else {
-      await api.updatePMDone(doneTarget.equipment_code, doneForm.date, freq, doneForm.notes || undefined, password);
+      await api.updatePMDone(doneTarget.equipment_code, doneForm.date, freq, doneForm.notes || undefined, password, extra);
     }
     setCredOpen(false);
     setDoneTarget(null);
@@ -126,7 +144,7 @@ export function PreventiveMaintenancePage() {
     setHistory([]);
     setHistoryLoading(true);
     try {
-      setHistory((await api.getPMHistory(row.equipment_code)) as unknown as HistoryRow[]);
+      setHistory(await api.getPMHistory(row.equipment_code));
     } catch (e) {
       showToast(e instanceof Error ? e.message : "Could not load history", "error");
     } finally { setHistoryLoading(false); }
@@ -210,7 +228,14 @@ export function PreventiveMaintenancePage() {
   ];
 
   return (
-    <PrintReport title={printMode === "planner" ? `PM Planner – ${plannerPeriod}` : "Preventive Maintenance List"}>
+    <PrintReport
+      title={printMode === "planner" ? `PM Planner – ${plannerPeriod}` : "Preventive Maintenance List"}
+      filters={{
+        Department: printMode === "list" ? department : undefined,
+        Search: printMode === "list" ? search : undefined,
+        Period: printMode === "planner" ? plannerPeriod : undefined,
+      }}
+    >
       <div className="space-y-6">
         <div className="no-print">
           <PageHeader
@@ -256,20 +281,27 @@ export function PreventiveMaintenancePage() {
       {/* Mark done */}
       <Modal
         open={!!doneTarget && !credOpen}
-        title={`Mark PM done — ${doneTarget?.equipment_name ?? ""}`}
+        title={`Update PM — ${doneTarget?.equipment_name ?? ""}`}
         onClose={() => setDoneTarget(null)}
         footer={
           <>
             <Button variant="secondary" onClick={() => setDoneTarget(null)}>Cancel</Button>
-            <Button onClick={() => { if (!doneForm.date) return showToast("Enter the PM date", "error"); setCredOpen(true); }}>Save</Button>
+            <Button onClick={startSign}>Save</Button>
           </>
         }
       >
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field><FieldLabel>PM Date *</FieldLabel><Input type="date" value={doneForm.date} onChange={(e) => setDoneForm({ ...doneForm, date: e.target.value })} /></Field>
+            <Field><FieldLabel>PM Done Date *</FieldLabel><Input type="date" max={today()} value={doneForm.date} onChange={(e) => setDoneForm({ ...doneForm, date: e.target.value })} /></Field>
             <Field><FieldLabel>Frequency (months)</FieldLabel><Input type="number" min={1} value={doneForm.freq} onChange={(e) => setDoneForm({ ...doneForm, freq: e.target.value })} /></Field>
           </div>
+          <p className="text-xs text-slate-500">
+            {doneTarget?.next_pm_date ? `Current due date: ${formatDate(doneTarget.next_pm_date)}. ` : ""}
+            Next due = done date + frequency − 1 day (e.g. done 02/11/2026, 12 months → due 01/11/2027). The done date cannot be later than today.
+          </p>
+          {doneIsOverdue && doneTarget?.next_pm_date && (
+            <OverdueFields due={doneTarget.next_pm_date} value={overdue} onChange={setOverdue} />
+          )}
           <Field><FieldLabel>Notes</FieldLabel><Textarea rows={3} value={doneForm.notes} onChange={(e) => setDoneForm({ ...doneForm, notes: e.target.value })} placeholder="Activities performed, observations..." /></Field>
         </div>
       </Modal>
@@ -292,7 +324,9 @@ export function PreventiveMaintenancePage() {
             emptyMessage="No PM activity recorded yet."
             columns={[
               { header: "PM Date", render: (h) => formatDate(h.pm_date) },
-              { header: "Frequency (months)", render: (h) => h.frequency_months },
+              { header: "Due Date", render: (h) => formatDate(h.due_date) },
+              { header: "Frequency (months)", render: (h) => h.frequency_months ?? "—" },
+              { header: "Overdue / Deviation", render: (h) => <OverdueInfo row={h} /> },
               { header: "Notes", render: (h) => h.notes || <span className="text-slate-400">—</span> },
               { header: "Performed by", render: (h) => h.performed_by },
               { header: "Recorded at", render: (h) => <span className="whitespace-nowrap">{formatDateTime(h.performed_at)}</span> },

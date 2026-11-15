@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { Calendar, Download, Printer } from "lucide-react";
+import { Calendar, Download, History, Printer } from "lucide-react";
 import { api } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
-import type { PeriodicReviewRow } from "../types";
+import type { PeriodicReviewRow, ReviewHistory } from "../types";
 import { Card } from "../components/ui/Card";
 import { DataTable, type Column } from "../components/ui/DataTable";
 import { Badge } from "../components/ui/Badge";
@@ -12,12 +12,16 @@ import { Field, FieldLabel, Input, Select, Textarea } from "../components/ui/Inp
 import { CredentialsDialog } from "../components/ui/CredentialsDialog";
 import { PageHeader } from "../components/ui/PageHeader";
 import { useToast } from "../components/ui/Toast";
-import { formatDate } from "../lib/format";
+import { formatDate, formatDateTime } from "../lib/format";
 import { PrintReport, downloadCsv, printReport } from "../components/PrintReport";
+import {
+  OverdueFields, OverdueInfo, emptyOverdue, isPastDue, overdueError, toOverdueDetails, todayLocal,
+  type OverdueState,
+} from "../components/schedule/OverdueFields";
 
 const TYPE_OPTIONS = ["Hardware", "Software", "Instrument", "Equipment"];
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-const today = () => new Date().toISOString().split("T")[0];
+const today = todayLocal;
 const str = (v: unknown) => (v == null ? "" : String(v));
 
 /** Days from today to a YYYY-MM-DD date, using local dates (no timezone shift). */
@@ -55,6 +59,13 @@ export function PeriodicReviewPage() {
   const [target, setTarget] = useState<PeriodicReviewRow | null>(null);
   const [form, setForm] = useState({ date: today(), notes: "" });
   const [credOpen, setCredOpen] = useState(false);
+  const [overdue, setOverdue] = useState<OverdueState>(emptyOverdue());
+  const targetOverdue = target?.active !== false && isPastDue(target?.next_review_date);
+
+  // History
+  const [historyTarget, setHistoryTarget] = useState<PeriodicReviewRow | null>(null);
+  const [history, setHistory] = useState<ReviewHistory[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   // Planner
   const [plannerOpen, setPlannerOpen] = useState(false);
@@ -79,11 +90,41 @@ export function PeriodicReviewPage() {
 
   const confirmDone = async ({ password }: { password: string; reason: string }) => {
     if (!target) return;
-    await api.updateReviewDone(target.equipment_code, form.date, form.notes || undefined, password);
+    await api.updateReviewDone(
+      target.equipment_code, form.date, form.notes || undefined, password,
+      targetOverdue ? toOverdueDetails(overdue) : undefined,
+    );
     setCredOpen(false);
     setTarget(null);
     showToast("Periodic review recorded.");
     load();
+  };
+
+  const openUpdate = (r: PeriodicReviewRow) => {
+    setTarget(r);
+    setForm({ date: today(), notes: "" });
+    setOverdue(emptyOverdue());
+  };
+
+  const startSign = () => {
+    if (!form.date) return showToast("Enter the review date", "error");
+    if (form.date > today()) return showToast("Review date cannot be later than today", "error");
+    if (targetOverdue) {
+      const err = overdueError(overdue);
+      if (err) return showToast(err, "error");
+    }
+    setCredOpen(true);
+  };
+
+  const openHistory = async (r: PeriodicReviewRow) => {
+    setHistoryTarget(r);
+    setHistory([]);
+    setHistoryLoading(true);
+    try {
+      setHistory(await api.getReviewHistory(r.equipment_code));
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "Could not load history", "error");
+    } finally { setHistoryLoading(false); }
   };
 
   const loadPlanner = async () => {
@@ -119,24 +160,30 @@ export function PeriodicReviewPage() {
     ...baseColumns,
     { header: "Updated by", render: (r) => <span className="text-xs text-slate-500">{r.updated_by || "—"}</span> },
     { header: "Status", render: (r) => (r.active === false ? <Badge tone="red">Retired</Badge> : <Badge tone="green">Active</Badge>) },
-    ...(canUpdate ? [{
+    {
       header: "",
       noPrint: true,
       className: "px-6 py-4",
-      render: (r: PeriodicReviewRow) => (r.active === false ? null : (
-        <Button size="sm" onClick={() => { setTarget(r); setForm({ date: today(), notes: "" }); }}>Update</Button>
-      )),
-    }] : []),
+      render: (r: PeriodicReviewRow) => (
+        <div className="flex flex-wrap gap-2">
+          {canUpdate && r.active !== false && <Button size="sm" onClick={() => openUpdate(r)}>Update</Button>}
+          <Button size="sm" variant="secondary" onClick={() => void openHistory(r)}><History size={13} /> History</Button>
+        </div>
+      ),
+    },
   ];
 
   return (
-    <PrintReport title={printMode === "planner" ? `Periodic Review Planner – ${plannerPeriod}` : "Periodic Review Report"}>
+    <PrintReport
+      title={printMode === "planner" ? `Periodic Review Planner – ${plannerPeriod}` : "Periodic Review Report"}
+      filters={{ Type: filters.type, Department: filters.department, Period: printMode === "planner" ? plannerPeriod : undefined }}
+    >
       <div className="space-y-6">
         <div className="no-print">
           <PageHeader
             eyebrow="Compliance"
             title="Periodic Review Management"
-            description="Validated computerized systems due for periodic review. Under-validation systems are excluded; retired systems stay listed for history but are not part of the planner."
+            description="Validated computerized systems due for periodic review. The first review is due from the validation date; later reviews from the last review (minus one day). Reminders go out 90 days before. Under-validation systems are excluded; retired systems stay listed for history but are not part of the planner."
             actions={
               <div className="flex flex-wrap gap-2">
                 <Button variant="secondary" onClick={() => { setPlannerOpen(true); void loadPlanner(); }}><Calendar size={15} /> Planner</Button>
@@ -174,20 +221,24 @@ export function PeriodicReviewPage() {
 
       <Modal
         open={!!target && !credOpen}
-        title={`Mark review done — ${target?.equipment_name ?? ""}`}
+        title={`Update periodic review — ${target?.equipment_name ?? ""}`}
         onClose={() => setTarget(null)}
         footer={
           <>
             <Button variant="secondary" onClick={() => setTarget(null)}>Cancel</Button>
-            <Button onClick={() => { if (!form.date) return showToast("Enter the review date", "error"); setCredOpen(true); }}>Save</Button>
+            <Button onClick={startSign}>Save</Button>
           </>
         }
       >
         <div className="space-y-4">
-          <Field><FieldLabel>Review Date *</FieldLabel><Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></Field>
+          <Field><FieldLabel>Review Done Date *</FieldLabel><Input type="date" max={today()} value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></Field>
           <p className="text-xs text-slate-500">
-            Next review is calculated from the review date and the frequency of {target?.periodic_review_frequency ?? 12} months.
+            {target?.next_review_date ? `Current due date: ${formatDate(target.next_review_date)}. ` : ""}
+            Next due = review date + {target?.periodic_review_frequency ?? 36} months − 1 day. The review date cannot be later than today.
           </p>
+          {targetOverdue && target?.next_review_date && (
+            <OverdueFields due={target.next_review_date} value={overdue} onChange={setOverdue} />
+          )}
           <Field><FieldLabel>Notes</FieldLabel><Textarea rows={3} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Review outcome, observations..." /></Field>
         </div>
       </Modal>
@@ -200,6 +251,26 @@ export function PeriodicReviewPage() {
         onConfirm={confirmDone}
         onClose={() => setCredOpen(false)}
       />
+
+      <Modal open={!!historyTarget} size="xl" title={`Periodic review history — ${historyTarget?.equipment_name ?? ""}`} onClose={() => setHistoryTarget(null)}>
+        {historyLoading ? <p className="text-sm text-slate-500">Loading...</p> : (
+          <DataTable
+            rows={history}
+            rowKey={(h) => h.id}
+            emptyMessage="No periodic review recorded yet."
+            columns={[
+              { header: "Review Date", render: (h) => formatDate(h.review_date) },
+              { header: "Due Date", render: (h) => formatDate(h.due_date) },
+              { header: "Next Due", render: (h) => formatDate(h.next_due_date) },
+              { header: "Frequency (months)", render: (h) => h.frequency_months ?? "—" },
+              { header: "Overdue / Deviation", render: (h) => <OverdueInfo row={h} /> },
+              { header: "Notes", render: (h) => h.notes || <span className="text-slate-400">—</span> },
+              { header: "Performed by", render: (h) => h.performed_by },
+              { header: "Recorded at", render: (h) => <span className="whitespace-nowrap">{formatDateTime(h.performed_at)}</span> },
+            ]}
+          />
+        )}
+      </Modal>
 
       <Modal
         open={plannerOpen}

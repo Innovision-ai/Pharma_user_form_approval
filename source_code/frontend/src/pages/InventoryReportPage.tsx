@@ -20,7 +20,7 @@ const SYSTEM_TYPE_OPTIONS = ["HMI", "SCADA", "Software", "DCS", "Data Logger", "
 // The 14 columns requested in the observations
 const COLUMN_KEYS = [
   "equipment_code", "name", "type", "application_name", "computer_system_id",
-  "instrument_ids", "make", "model_name", "system_type", "gamp_category",
+  "hostname", "ip_address", "instrument_ids", "make", "model_name", "system_type", "gamp_category",
   "usp_classification", "allowed_roles", "location", "validation_status", "validation_date",
 ];
 const COLUMN_HEADERS: Record<string, string> = {
@@ -29,6 +29,8 @@ const COLUMN_HEADERS: Record<string, string> = {
   type: "Type",
   application_name: "Application Name",
   computer_system_id: "Computer System ID",
+  hostname: "Hostname",
+  ip_address: "IP Address",
   instrument_ids: "Instrument / Equipment / Connected IDs",
   make: "Make",
   model_name: "Model",
@@ -86,7 +88,9 @@ export function InventoryReportPage() {
       e.equipment_code.toLowerCase().includes(s) ||
       e.name.toLowerCase().includes(s) ||
       (e.application_name ?? "").toLowerCase().includes(s) ||
-      (e.computer_system_id ?? "").toLowerCase().includes(s)
+      (e.computer_system_id ?? "").toLowerCase().includes(s) ||
+      (e.hostname ?? "").toLowerCase().includes(s) ||
+      (e.ip_address ?? "").toLowerCase().includes(s)
     );
   }, [items, search]);
 
@@ -108,7 +112,13 @@ export function InventoryReportPage() {
   };
 
   return (
-    <PrintReport title={`Inventory Report${filters.status === "active" ? " – Active" : filters.status === "retired" ? " – Retired" : ""}`}>
+    <PrintReport
+      title={`Inventory Report${filters.status === "active" ? " – Active" : filters.status === "retired" ? " – Retired" : ""}`}
+      filters={{
+        Status: filters.status === "all" ? "" : filters.status === "active" ? "Active" : "Retired",
+        Plant: filters.plant, "System Type": filters.system_type, Search: search,
+      }}
+    >
     <div className="space-y-6">
       <div className="no-print">
       <PageHeader
@@ -199,6 +209,8 @@ export function InventoryReportPage() {
               ...(visibleCols.includes("type") ? [{ header: "Type", render: (e: Equipment) => <Badge>{e.type}</Badge> }] : []),
               ...(visibleCols.includes("application_name") ? [{ header: "Application Name", render: (e: Equipment) => e.application_name ?? <span className="text-slate-400">—</span> }] : []),
               ...(visibleCols.includes("computer_system_id") ? [{ header: "Computer System ID", render: (e: Equipment) => e.computer_system_id ?? <span className="text-slate-400">—</span> }] : []),
+              ...(visibleCols.includes("hostname") ? [{ header: "Hostname", render: (e: Equipment) => e.hostname ?? <span className="text-slate-400">—</span> }] : []),
+              ...(visibleCols.includes("ip_address") ? [{ header: "IP Address", render: (e: Equipment) => e.ip_address ?? <span className="text-slate-400">—</span> }] : []),
               ...(visibleCols.includes("instrument_ids") ? [{ header: "Instrument IDs", render: (e: Equipment) => e.instrument_ids ?? <span className="text-slate-400">—</span> }] : []),
               ...(visibleCols.includes("make") ? [{ header: "Make", render: (e: Equipment) => e.make ?? <span className="text-slate-400">—</span> }] : []),
               ...(visibleCols.includes("model_name") ? [{ header: "Model", render: (e: Equipment) => e.model_name ?? <span className="text-slate-400">—</span> }] : []),

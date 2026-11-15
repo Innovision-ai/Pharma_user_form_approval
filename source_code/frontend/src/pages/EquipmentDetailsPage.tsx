@@ -94,6 +94,8 @@ export function EquipmentDetailsPage() {
                 <InfoRow label="Periodic Review Freq." value={equipment.periodic_review_frequency != null ? `${equipment.periodic_review_frequency} months` : undefined} />
                 <InfoRow label="Include in Backup" value={equipment.backup_include} />
                 <InfoRow label="Computer System ID" value={equipment.computer_system_id} />
+                <InfoRow label="Hostname" value={equipment.hostname} />
+                <InfoRow label="IP Address" value={equipment.ip_address} />
                 <InfoRow label="Instrument IDs" value={equipment.instrument_ids} />
                 <InfoRow label="Remarks" value={equipment.remarks} />
               </div>

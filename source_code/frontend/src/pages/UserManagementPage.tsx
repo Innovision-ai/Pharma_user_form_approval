@@ -256,7 +256,15 @@ export function UserManagementPage() {
   };
 
   return (
-    <PrintReport title={`${reportTitle}${filters.role ? ` – ${ROLE_LABELS[filters.role] ?? filters.role}` : ""}`}>
+    <PrintReport
+      title={`${reportTitle}${filters.role ? ` – ${ROLE_LABELS[filters.role] ?? filters.role}` : ""}`}
+      filters={{
+        Role: filters.role ? ROLE_LABELS[filters.role] ?? filters.role : "",
+        Plant: filters.plant,
+        Status: filters.active === "true" ? "Active" : filters.active === "false" ? "Inactive" : "",
+        Search: search,
+      }}
+    >
     <div className="space-y-6">
       <div className="no-print">
       <PageHeader

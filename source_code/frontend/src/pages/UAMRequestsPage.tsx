@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Plus } from "lucide-react";
+import { Plus, UserPlus, UserX } from "lucide-react";
 import { api } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { formatDate } from "../lib/format";
@@ -13,6 +13,7 @@ import { Button } from "../components/ui/Button";
 import { Select } from "../components/ui/Input";
 import { StatusBadge } from "../components/StatusBadge";
 import { useToast } from "../components/ui/Toast";
+import { SelfDeactivateDialog } from "../components/requests/SelfDeactivateDialog";
 
 export const TEMPLATE_LABELS: Record<string, string> = {
   MANUFACTURING: "Manufacturing",
@@ -45,6 +46,7 @@ export function UAMRequestsPage() {
   const [items, setItems] = useState<UAMRequest[]>([]);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(true);
+  const [deactivateOpen, setDeactivateOpen] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -63,9 +65,17 @@ export function UAMRequestsPage() {
         eyebrow="Workflow"
         title="Requests"
         description="User access, software and folder / project requests for the selected plant, with electronic review, approval, execution and acknowledgement."
-        actions={canCreate && (
-          <Link to="/uam/requests/new"><Button><Plus size={16} /> Create request</Button></Link>
-        )}
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" onClick={() => setDeactivateOpen(true)}><UserX size={16} /> Deactivate all my access</Button>
+            {canCreate && (
+              <>
+                <Link to="/uam/requests/for-others"><Button variant="secondary"><UserPlus size={16} /> Request for others</Button></Link>
+                <Link to="/uam/requests/new"><Button><Plus size={16} /> Create request</Button></Link>
+              </>
+            )}
+          </div>
+        }
       />
 
       <div className="surface flex flex-wrap items-center gap-3 p-4">
@@ -91,12 +101,20 @@ export function UAMRequestsPage() {
               { header: "Action", render: (r) => r.action },
               { header: "Role", render: (r) => r.requested_role },
               { header: "Initiator", render: (r) => r.employee_name },
+              {
+                header: "For",
+                render: (r) => (r.for_others
+                  ? <span className="text-sm">{r.beneficiary_name} <span className="text-xs text-slate-400">({r.beneficiary_employee_id})</span></span>
+                  : <span className="text-slate-400">Self</span>),
+              },
               { header: "Status", render: (r) => <StatusBadge status={r.status} /> },
               { header: "Created", render: (r) => <span className="whitespace-nowrap">{formatDate(r.created_at)}</span> },
             ]}
           />
         )}
       </Card>
+
+      <SelfDeactivateDialog open={deactivateOpen} onClose={() => setDeactivateOpen(false)} onDone={load} />
     </div>
   );
 }

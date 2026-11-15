@@ -29,6 +29,8 @@ interface FormState {
   plant: string;
   application_name: string;
   computer_system_id: string;
+  hostname: string;
+  ip_address: string;
   instrument_ids: string;
   make: string;
   model_name: string;
@@ -48,7 +50,7 @@ interface FormState {
 }
 
 const emptyForm = (plant: string): FormState => ({
-  name: "", type: "Software", plant, application_name: "", computer_system_id: "", instrument_ids: "",
+  name: "", type: "Software", plant, application_name: "", computer_system_id: "", hostname: "", ip_address: "", instrument_ids: "",
   make: "", model_name: "", system_type: "Software", gamp_category: "4", usp_classification: "",
   allowed_roles: [], location: "", validation_status: "under_validation", validation_date: "",
   initial_validation_date: "", latest_validation_date: "", periodic_review_frequency: "",
@@ -105,6 +107,8 @@ const ALL_COLUMNS: { key: string; header: string; render: (e: Equipment) => Reac
   { key: "type", header: "Type", render: (e) => <Badge>{e.type}</Badge> },
   { key: "application_name", header: "Application Name", render: (e) => text(e.application_name) },
   { key: "computer_system_id", header: "Computer System ID", render: (e) => text(e.computer_system_id) },
+  { key: "hostname", header: "Hostname", render: (e) => text(e.hostname) },
+  { key: "ip_address", header: "IP Address", render: (e) => (e.ip_address ? <span className="font-mono text-xs">{e.ip_address}</span> : dash) },
   { key: "instrument_ids", header: "Instrument IDs", render: (e) => text(e.instrument_ids) },
   { key: "system_type", header: "System Type", render: (e) => (e.system_type ? <Badge>{e.system_type}</Badge> : dash) },
   { key: "make", header: "Make", render: (e) => text(e.make) },
@@ -169,7 +173,7 @@ export function EquipmentMasterPage() {
   }, [modalOpen, form.plant]);
 
   const filteredItems = useMemo(() => items.filter((equipment) => {
-    const haystack = `${equipment.equipment_code} ${equipment.name} ${equipment.type} ${equipment.location} ${equipment.plant} ${equipment.make ?? ""} ${equipment.system_type ?? ""} ${equipment.application_name ?? ""} ${equipment.computer_system_id ?? ""}`.toLowerCase();
+    const haystack = `${equipment.equipment_code} ${equipment.name} ${equipment.type} ${equipment.location} ${equipment.plant} ${equipment.make ?? ""} ${equipment.system_type ?? ""} ${equipment.application_name ?? ""} ${equipment.computer_system_id ?? ""} ${equipment.hostname ?? ""} ${equipment.ip_address ?? ""}`.toLowerCase();
     return haystack.includes(query.toLowerCase())
       && (statusFilter === "all" || (statusFilter === "active" ? equipment.active : !equipment.active))
       && (!validationFilter || equipment.validation_status === validationFilter)
@@ -203,6 +207,8 @@ export function EquipmentMasterPage() {
       plant: eq.plant,
       application_name: eq.application_name ?? "",
       computer_system_id: eq.computer_system_id ?? "",
+      hostname: eq.hostname ?? "",
+      ip_address: eq.ip_address ?? "",
       instrument_ids: eq.instrument_ids ?? "",
       make: eq.make ?? "",
       model_name: eq.model_name ?? "",
@@ -244,6 +250,8 @@ export function EquipmentMasterPage() {
         initial_validation_date: form.initial_validation_date || null,
         latest_validation_date: form.latest_validation_date || null,
         computer_system_id: form.computer_system_id || null,
+        hostname: form.hostname.trim() || null,
+        ip_address: form.ip_address.trim() || null,
         instrument_ids: form.instrument_ids || null,
       };
       if (editingCode) {
@@ -418,32 +426,36 @@ export function EquipmentMasterPage() {
             <Input value={form.computer_system_id} onChange={(e) => set("computer_system_id", e.target.value)} placeholder="e.g. CS-010" />
             <p className="mt-1 text-xs text-slate-500">When entered, the system is added to the Preventive Maintenance planner automatically.</p>
           </Field>
-          <Field><FieldLabel>6. Instrument / Equipment / Connected Instrument IDs</FieldLabel><Input value={form.instrument_ids} onChange={(e) => set("instrument_ids", e.target.value)} placeholder="Comma-separated IDs" /></Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field><FieldLabel>7. Make</FieldLabel><Input value={form.make} onChange={(e) => set("make", e.target.value)} placeholder="e.g. Siemens" /></Field>
-            <Field><FieldLabel>8. Model</FieldLabel><Input value={form.model_name} onChange={(e) => set("model_name", e.target.value)} /></Field>
+            <Field><FieldLabel>6. Hostname</FieldLabel><Input value={form.hostname} onChange={(e) => set("hostname", e.target.value)} placeholder="e.g. HPLC-QC-01" /></Field>
+            <Field><FieldLabel>7. IP Address</FieldLabel><Input value={form.ip_address} onChange={(e) => set("ip_address", e.target.value)} placeholder="e.g. 10.20.1.15" inputMode="decimal" /></Field>
+          </div>
+          <Field><FieldLabel>8. Instrument / Equipment / Connected Instrument IDs</FieldLabel><Input value={form.instrument_ids} onChange={(e) => set("instrument_ids", e.target.value)} placeholder="Comma-separated IDs" /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field><FieldLabel>9. Make</FieldLabel><Input value={form.make} onChange={(e) => set("make", e.target.value)} placeholder="e.g. Siemens" /></Field>
+            <Field><FieldLabel>10. Model</FieldLabel><Input value={form.model_name} onChange={(e) => set("model_name", e.target.value)} /></Field>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <Field>
-              <FieldLabel>9. System Type</FieldLabel>
+              <FieldLabel>11. System Type</FieldLabel>
               <Select value={form.system_type} onChange={(e) => set("system_type", e.target.value)}>
                 {SYSTEM_TYPE_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
               </Select>
             </Field>
             <Field>
-              <FieldLabel>10. GAMP Category</FieldLabel>
+              <FieldLabel>12. GAMP Category</FieldLabel>
               <Select value={form.gamp_category} onChange={(e) => set("gamp_category", e.target.value)}>
                 {GAMP_OPTIONS.map((g) => <option key={g} value={g}>Category {g}</option>)}
               </Select>
             </Field>
           </div>
-          <Field><FieldLabel>11. USP Classification</FieldLabel><Input value={form.usp_classification} onChange={(e) => set("usp_classification", e.target.value)} /></Field>
+          <Field><FieldLabel>13. USP Classification</FieldLabel><Input value={form.usp_classification} onChange={(e) => set("usp_classification", e.target.value)} /></Field>
           <Field>
-            <FieldLabel>12. Allowed Roles *</FieldLabel>
+            <FieldLabel>14. Allowed Roles *</FieldLabel>
             <RoleTagInput value={form.allowed_roles} onChange={(roles) => set("allowed_roles", roles)} />
           </Field>
           <Field>
-            <FieldLabel>13. Department *</FieldLabel>
+            <FieldLabel>15. Department *</FieldLabel>
             <Select value={form.location} onChange={(e) => set("location", e.target.value)}>
               <option value="">Select department</option>
               {form.location && !departments.includes(form.location) && <option value={form.location}>{form.location}</option>}
@@ -452,13 +464,13 @@ export function EquipmentMasterPage() {
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field>
-              <FieldLabel>14. Validation Status</FieldLabel>
+              <FieldLabel>16. Validation Status</FieldLabel>
               <Select value={form.validation_status} onChange={(e) => set("validation_status", e.target.value)}>
                 {VALIDATION_STATUS_OPTIONS.map((v) => <option key={v} value={v}>{validationLabel(v)}</option>)}
               </Select>
             </Field>
             <Field>
-              <FieldLabel>15. Validation Completion Date{form.validation_status === "validated" ? " *" : ""}</FieldLabel>
+              <FieldLabel>17. Validation Completion Date{form.validation_status === "validated" ? " *" : ""}</FieldLabel>
               <Input type="date" value={form.validation_date} onChange={(e) => set("validation_date", e.target.value)} />
             </Field>
           </div>
@@ -466,18 +478,18 @@ export function EquipmentMasterPage() {
             <p className="-mt-2 text-xs text-amber-700">"Validated" is accepted only after the equipment's asset creation request is approved.</p>
           )}
           <div className="grid grid-cols-2 gap-3">
-            <Field><FieldLabel>16. Initial Validation Date</FieldLabel><Input type="date" value={form.initial_validation_date} onChange={(e) => set("initial_validation_date", e.target.value)} /></Field>
-            <Field><FieldLabel>17. Latest Validation Date</FieldLabel><Input type="date" value={form.latest_validation_date} onChange={(e) => set("latest_validation_date", e.target.value)} /></Field>
+            <Field><FieldLabel>18. Initial Validation Date</FieldLabel><Input type="date" value={form.initial_validation_date} onChange={(e) => set("initial_validation_date", e.target.value)} /></Field>
+            <Field><FieldLabel>19. Latest Validation Date</FieldLabel><Input type="date" value={form.latest_validation_date} onChange={(e) => set("latest_validation_date", e.target.value)} /></Field>
           </div>
-          <Field><FieldLabel>18. Periodic Review Freq. (months)</FieldLabel><Input type="number" min={1} value={form.periodic_review_frequency} onChange={(e) => set("periodic_review_frequency", e.target.value)} placeholder="e.g. 12" /></Field>
+          <Field><FieldLabel>20. Periodic Review Freq. (months)</FieldLabel><Input type="number" min={1} value={form.periodic_review_frequency} onChange={(e) => set("periodic_review_frequency", e.target.value)} placeholder="e.g. 12" /></Field>
           <Field>
-            <FieldLabel>19. Include in Backup</FieldLabel>
+            <FieldLabel>21. Include in Backup</FieldLabel>
             <label className="flex items-center gap-2 pt-1">
               <input type="checkbox" checked={form.backup_include} onChange={(e) => set("backup_include", e.target.checked)} className="h-4 w-4 rounded" />
               <span className="text-sm text-slate-700">Yes, include in backup schedule</span>
             </label>
           </Field>
-          <Field><FieldLabel>20. Remarks</FieldLabel><Textarea rows={3} value={form.remarks} onChange={(e) => set("remarks", e.target.value)} /></Field>
+          <Field><FieldLabel>22. Remarks</FieldLabel><Textarea rows={3} value={form.remarks} onChange={(e) => set("remarks", e.target.value)} /></Field>
         </div>
       </Modal>
     </div>
