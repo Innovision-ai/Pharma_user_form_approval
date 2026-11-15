@@ -97,6 +97,8 @@ class EquipmentCreate(BaseModel):
     computer_system_id: Optional[str] = None
     remarks: Optional[str] = None
     instrument_ids: Optional[str] = None
+    hostname: Optional[str] = Field(default=None, max_length=120)
+    ip_address: Optional[str] = Field(default=None, max_length=45)
 
     @field_validator("allowed_roles")
     @classmethod
@@ -140,6 +142,8 @@ class EquipmentOut(BaseModel):
     computer_system_id: Optional[str] = None
     remarks: Optional[str] = None
     instrument_ids: Optional[str] = None
+    hostname: Optional[str] = Field(default=None, max_length=120)
+    ip_address: Optional[str] = Field(default=None, max_length=45)
 
     @field_validator("allowed_roles", mode="before")
     @classmethod
@@ -298,6 +302,36 @@ class UAMRequestCreate(BaseModel):
     # E-signature: the initiator's own password + reason, verified on submit
     auth_password: Optional[str] = Field(default=None, max_length=100)
     auth_reason: Optional[str] = Field(default=None, max_length=2000)
+    # Request for others (new joiner, service / validation engineer, ...)
+    for_others: bool = False
+    beneficiary_employee_id: Optional[str] = Field(default=None, max_length=40)
+    beneficiary_name: Optional[str] = Field(default=None, max_length=120)
+    beneficiary_email: Optional[str] = Field(default=None, max_length=160)
+    beneficiary_department: Optional[str] = Field(default=None, max_length=80)
+    # "Are all required trainings completed?" YES (optional attachment) / NA (remark required)
+    training_completed: Optional[str] = Field(default=None, pattern="^(YES|NA)$")
+    training_remark: Optional[str] = Field(default=None, max_length=2000)
+    training_attachment_id: Optional[int] = None
+    # Temporary login: deactivation raised automatically after 10 or 15 days
+    temporary_login: bool = False
+    temporary_days: Optional[int] = None
+
+
+class UAMReassign(BaseModel):
+    """Proxy user: the initiator replaces an assignee who is absent."""
+    stage: str = Field(pattern="^(reviewer|department_approver|qa_approver|it_executor)$")
+    new_user_id: str = Field(min_length=1, max_length=20)
+    auth_password: Optional[str] = Field(default=None, max_length=100)
+    auth_reason: Optional[str] = Field(default=None, max_length=2000)
+
+
+class SelfDeactivateRequest(BaseModel):
+    """A user asks for all of their own access to be deactivated."""
+    reason: str = Field(min_length=1, max_length=2000)
+    reviewer_id: str = Field(min_length=1, max_length=20)
+    it_executor_id: Optional[str] = Field(default=None, max_length=20)
+    auth_password: Optional[str] = Field(default=None, max_length=100)
+    auth_reason: Optional[str] = Field(default=None, max_length=2000)
 
 
 class UAMAction(BaseModel):
@@ -338,8 +372,32 @@ class UAMRequestOut(BaseModel):
     it_executor_id: Optional[str] = None
     rejection_reason: Optional[str] = None
     auth_reason: Optional[str] = None
+    for_others: bool = False
+    beneficiary_employee_id: Optional[str] = None
+    beneficiary_name: Optional[str] = None
+    beneficiary_email: Optional[str] = None
+    beneficiary_department: Optional[str] = None
+    training_completed: Optional[str] = None
+    training_remark: Optional[str] = None
+    training_attachment_id: Optional[int] = None
+    temporary_login: bool = False
+    temporary_days: Optional[int] = None
+    access_expires_on: Optional[date] = None
+    auto_deactivation_code: Optional[str] = None
+    # True while a temporary password is waiting to be shown at acknowledgement (never the value)
+    has_temp_password: bool = False
     created_at: datetime
     updated_at: datetime
+
+    @field_validator("for_others", "temporary_login", mode="before")
+    @classmethod
+    def none_is_false(cls, v):
+        return bool(v)
+
+
+class UAMAckOut(UAMRequestOut):
+    """Acknowledgement response: the temporary password is shown once, to the initiator."""
+    temporary_password: Optional[str] = None
 
 
 # ---------- Asset Creation Workflow ----------

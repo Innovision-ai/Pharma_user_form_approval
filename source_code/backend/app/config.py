@@ -15,6 +15,8 @@ CORS_ORIGINS = [
     "http://127.0.0.1:5174",
     "https://frontend-six-rust-93.vercel.app",
 ]
+# Vercel preview deployments of the frontend project (branch builds)
+CORS_ORIGIN_REGEX = r"https://frontend-[a-z0-9-]+-samarths-projects-177c353a\.vercel\.app"
 
 IT_NOTIFICATION_EMAIL = os.getenv("IT_NOTIFICATION_EMAIL", "it.support@company.com")
 

@@ -36,6 +36,8 @@ COLUMN_ADDITIONS: dict[str, list[tuple[str, str]]] = {
         ("computer_system_id", "computer_system_id VARCHAR(60)"),
         ("remarks", "remarks TEXT"),
         ("instrument_ids", "instrument_ids TEXT"),
+        ("hostname", "hostname VARCHAR(120)"),
+        ("ip_address", "ip_address VARCHAR(45)"),
     ],
     "audit_logs": [
         ("entity", "entity VARCHAR(80)"),
@@ -50,9 +52,32 @@ COLUMN_ADDITIONS: dict[str, list[tuple[str, str]]] = {
     ],
     "backup_schedule_entries": [
         ("backup_path", "backup_path TEXT"),
+        ("frequency_hours", "frequency_hours INTEGER"),
+        ("last_backup_at", "last_backup_at TIMESTAMP"),
+        ("next_backup_at", "next_backup_at TIMESTAMP"),
     ],
     "uam_requests": [
         ("auth_reason", "auth_reason TEXT"),
+        ("for_others", "for_others BOOLEAN DEFAULT FALSE"),
+        ("beneficiary_employee_id", "beneficiary_employee_id VARCHAR(40)"),
+        ("beneficiary_name", "beneficiary_name VARCHAR(120)"),
+        ("beneficiary_email", "beneficiary_email VARCHAR(160)"),
+        ("beneficiary_department", "beneficiary_department VARCHAR(80)"),
+        ("training_completed", "training_completed VARCHAR(5)"),
+        ("training_remark", "training_remark TEXT"),
+        ("training_attachment_id", "training_attachment_id INTEGER"),
+        ("temporary_login", "temporary_login BOOLEAN DEFAULT FALSE"),
+        ("temporary_days", "temporary_days INTEGER"),
+        ("access_expires_on", "access_expires_on DATE"),
+        ("auto_deactivation_code", "auto_deactivation_code VARCHAR(20)"),
+        ("temp_password_enc", "temp_password_enc TEXT"),
+    ],
+    "pm_history": [
+        ("due_date", "due_date DATE"),
+        ("overdue", "overdue BOOLEAN DEFAULT FALSE"),
+        ("breakdown_details", "breakdown_details TEXT"),
+        ("deviation_no", "deviation_no VARCHAR(80)"),
+        ("attachment_id", "attachment_id INTEGER"),
     ],
 }
 

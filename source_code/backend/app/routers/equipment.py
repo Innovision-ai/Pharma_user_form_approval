@@ -130,6 +130,19 @@ def _apply_extended_fields(item: Equipment, payload: EquipmentCreate) -> None:
     item.remarks = payload.remarks
     if hasattr(payload, "instrument_ids"):
         item.instrument_ids = payload.instrument_ids
+    item.hostname = (payload.hostname or "").strip() or None
+    item.ip_address = _valid_ip(payload.ip_address)
+
+
+def _valid_ip(value: Optional[str]) -> Optional[str]:
+    value = (value or "").strip()
+    if not value:
+        return None
+    import ipaddress
+    try:
+        return str(ipaddress.ip_address(value))
+    except ValueError:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"'{value}' is not a valid IP address")
 
 
 def _equipment_dict(item: Equipment) -> dict:
@@ -152,6 +165,8 @@ def _equipment_dict(item: Equipment) -> dict:
         "backup_include": item.backup_include,
         "computer_system_id": item.computer_system_id,
         "remarks": item.remarks,
+        "hostname": item.hostname,
+        "ip_address": item.ip_address,
     }
 
 
@@ -173,6 +188,8 @@ FIELD_LABELS = {
     "backup_include": "Include in Backup",
     "computer_system_id": "Computer System ID",
     "remarks": "Remarks",
+    "hostname": "Hostname",
+    "ip_address": "IP Address",
 }
 
 

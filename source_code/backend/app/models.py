@@ -1,7 +1,7 @@
 from datetime import datetime, date
 from typing import Optional
 
-from sqlalchemy import Boolean, Date, DateTime, Integer, String, Text
+from sqlalchemy import Boolean, Date, DateTime, Integer, LargeBinary, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -66,6 +66,8 @@ class Equipment(Base):
     computer_system_id: Mapped[Optional[str]] = mapped_column(String(60), nullable=True)
     remarks: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     instrument_ids: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Instrument / Equipment / Connected Instrument IDs
+    hostname: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    ip_address: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)  # IPv4 or IPv6
 
     def roles_list(self) -> list[str]:
         return [r.strip() for r in self.allowed_roles.split(",") if r.strip()]
@@ -149,8 +151,40 @@ class UAMRequest(Base):
     status: Mapped[str] = mapped_column(String(40), index=True)
     rejection_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     auth_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # reason given at the last e-signature
+    # Request for others: the person whose account is created / changed
+    for_others: Mapped[bool] = mapped_column(Boolean, default=False)
+    beneficiary_employee_id: Mapped[Optional[str]] = mapped_column(String(40), nullable=True, index=True)
+    beneficiary_name: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    beneficiary_email: Mapped[Optional[str]] = mapped_column(String(160), nullable=True)
+    beneficiary_department: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    # Training acknowledgement: YES (optional attachment) or NA (remark required)
+    training_completed: Mapped[Optional[str]] = mapped_column(String(5), nullable=True)
+    training_remark: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    training_attachment_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Temporary login: a deactivation request is raised automatically on expiry
+    temporary_login: Mapped[bool] = mapped_column(Boolean, default=False)
+    temporary_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    access_expires_on: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    auto_deactivation_code: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    # Temporary password set by IT: encrypted, shown once to the acknowledging initiator, then wiped
+    temp_password_enc: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class Attachment(Base):
+    """Small uploaded files (training evidence, deviation records). Stored in the
+    database because the serverless host has no persistent disk."""
+    __tablename__ = "attachments"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    owner_employee_id: Mapped[str] = mapped_column(String(20), index=True)
+    filename: Mapped[str] = mapped_column(String(200))
+    content_type: Mapped[str] = mapped_column(String(100))
+    size: Mapped[int] = mapped_column(Integer)
+    data: Mapped[bytes] = mapped_column(LargeBinary)
+    purpose: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 class AuditLog(Base):
@@ -245,6 +279,25 @@ class PeriodicReviewEntry(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class PeriodicReviewHistory(Base):
+    """One row per completed periodic review (like PM history)."""
+    __tablename__ = "periodic_review_history"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    equipment_code: Mapped[str] = mapped_column(String(20), index=True)
+    review_date: Mapped[date] = mapped_column(Date)
+    due_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    next_due_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    frequency_months: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    overdue: Mapped[bool] = mapped_column(Boolean, default=False)
+    breakdown_details: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Breakdown / QMS details
+    deviation_no: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    attachment_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    performed_by: Mapped[str] = mapped_column(String(120))
+    performed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class BackupScheduleEntry(Base):
     __tablename__ = "backup_schedule_entries"
 
@@ -252,7 +305,10 @@ class BackupScheduleEntry(Base):
     equipment_code: Mapped[str] = mapped_column(String(20), index=True)
     last_backup_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     next_backup_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    frequency_days: Mapped[int] = mapped_column(Integer, default=30)
+    frequency_days: Mapped[int] = mapped_column(Integer, default=30)  # legacy; frequency_hours is authoritative
+    frequency_hours: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    last_backup_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    next_backup_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     backup_path: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     updated_by: Mapped[str] = mapped_column(String(120), default="")

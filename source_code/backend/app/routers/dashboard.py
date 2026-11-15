@@ -27,6 +27,10 @@ def get_summary(
     from app.routers.password_vault import sweep_expiry_notifications
     from app.routers.uam_requests import _out as uam_out
     sweep_expiry_notifications(db)
+    from app.routers.uam_requests import sweep_temporary_logins
+    from app.scheduling import sweep_schedule_notifications
+    sweep_temporary_logins(db)
+    sweep_schedule_notifications(db)
 
     eq_q = db.query(Equipment)
     if token_plant:

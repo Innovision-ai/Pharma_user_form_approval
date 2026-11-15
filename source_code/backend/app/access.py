@@ -37,7 +37,9 @@ def user_access(db: Session, employee_id: Optional[str] = None, asset_code: Opti
 
     for r in uam.order_by(UAMRequest.updated_at).all():
         form = json.loads(r.form_data or "{}")
-        holder = form.get("target_employee_id") or r.employee_id
+        # Whose account it is: bulk-deactivation target, request-for-others
+        # beneficiary, or the initiator themselves
+        holder = form.get("target_employee_id") or r.beneficiary_employee_id or r.employee_id
         if employee_id and holder != employee_id:
             continue
         key = (holder, r.asset_code)
@@ -46,7 +48,9 @@ def user_access(db: Session, employee_id: Optional[str] = None, asset_code: Opti
             continue  # nothing to deactivate
         if r.action in ("CREATE", "ACTIVATE") or rec is None:
             rec = rec or {
-                "employee_id": holder, "user_name": r.employee_name, "department": None,
+                "employee_id": holder,
+                "user_name": r.beneficiary_name if r.beneficiary_employee_id else r.employee_name,
+                "department": r.beneficiary_department if r.beneficiary_employee_id else None,
                 "equipment_code": r.asset_code, "equipment_name": form.get("asset_name") or r.asset_code,
                 "role": r.requested_role, "user_id": form.get("user_login_id") or r.employee_id,
                 "request_code": r.request_code, "granted_by": r.it_executor_id or "IT Executor",

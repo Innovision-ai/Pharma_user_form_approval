@@ -14,9 +14,8 @@ Additions:
 from datetime import date
 from typing import Optional
 
-from dateutil.relativedelta import relativedelta
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import Column, Integer, String, Date, DateTime, Text
+from sqlalchemy import Boolean, Column, Integer, String, Date, DateTime, Text
 from sqlalchemy.orm import Session
 from datetime import datetime
 
@@ -24,6 +23,7 @@ from app.database import get_db, Base
 from app.deps import get_current_user, get_current_plant, verify_current_password
 from app.models import Equipment, PreventiveMaintenanceEntry, User
 from app.audit import diff_and_log, log_audit
+from app.scheduling import next_due, overdue_details, require_not_future
 
 router = APIRouter(prefix="/api/preventive-maintenance", tags=["preventive-maintenance"])
 
@@ -41,6 +41,12 @@ class PMHistory(Base):
     notes = Column(Text, nullable=True)
     performed_by = Column(String(120))
     performed_at = Column(DateTime, default=datetime.utcnow)
+    # Completion after the due date: Breakdown / QMS details and deviation number
+    due_date = Column(Date, nullable=True)
+    overdue = Column(Boolean, default=False)
+    breakdown_details = Column(Text, nullable=True)
+    deviation_no = Column(String(80), nullable=True)
+    attachment_id = Column(Integer, nullable=True)
 
 
 class AdditionalPMSystem(Base):
@@ -211,6 +217,11 @@ def get_pm_history(
             "notes": r.notes,
             "performed_by": r.performed_by,
             "performed_at": r.performed_at.isoformat() if r.performed_at else None,
+            "due_date": r.due_date.isoformat() if r.due_date else None,
+            "overdue": bool(r.overdue),
+            "breakdown_details": r.breakdown_details,
+            "deviation_no": r.deviation_no,
+            "attachment_id": r.attachment_id,
         }
         for r in records
     ]
@@ -241,7 +252,10 @@ def update_done(
 
     old_last = entry.last_pm_date
     last_date = date.fromisoformat(payload["last_pm_date"])
-    next_date = last_date + relativedelta(months=freq)
+    require_not_future(last_date, "PM done date")
+    due = entry.next_pm_date
+    overdue = overdue_details(db, payload, due)
+    next_date = next_due(last_date, freq)
 
     entry.last_pm_date = last_date
     entry.next_pm_date = next_date
@@ -258,15 +272,19 @@ def update_done(
         frequency_months=freq,
         notes=payload.get("notes"),
         performed_by=current_user.name,
+        due_date=due,
+        **overdue,
     )
     db.add(history)
     db.commit()
 
     # Audit
     reason = payload.get("reason", "")
+    late = (f" — completed after due date {due:%d/%m/%Y}; deviation {overdue['deviation_no']}"
+            if overdue["overdue"] else "")
     log_audit(
         db, current_user, "PM_UPDATED",
-        f"PM performed for {eq.name} ({equipment_code})" + (f" — {reason}" if reason else ""),
+        f"PM performed for {eq.name} ({equipment_code})" + (f" — {reason}" if reason else "") + late,
         entity=equipment_code, field="Last PM Date",
         old=old_last,
         new=last_date,
@@ -349,8 +367,11 @@ def update_additional_system(
 
     if "last_pm_date" in payload:
         last_date = date.fromisoformat(payload["last_pm_date"])
+        require_not_future(last_date, "PM done date")
+        due = sys.next_pm_date
+        overdue = overdue_details(db, payload, due)
         sys.last_pm_date = last_date
-        sys.next_pm_date = last_date + relativedelta(months=sys.frequency_months)
+        sys.next_pm_date = next_due(last_date, sys.frequency_months)
         # Write history
         history = PMHistory(
             equipment_code=f"ADD-{sys.id}",
@@ -358,6 +379,8 @@ def update_additional_system(
             frequency_months=sys.frequency_months,
             notes=payload.get("notes"),
             performed_by=current_user.name,
+            due_date=due,
+            **overdue,
         )
         db.add(history)
 

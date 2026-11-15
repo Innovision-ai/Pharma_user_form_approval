@@ -12,7 +12,7 @@ Additions:
   - search param
   - plant scoping
 """
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -22,6 +22,7 @@ from app.database import get_db
 from app.deps import get_current_user, get_current_plant, verify_current_password
 from app.models import BackupScheduleEntry, Equipment, User
 from app.audit import log_audit
+from app.scheduling import parse_utc, require_not_future_dt
 
 router = APIRouter(prefix="/api/backup-schedule", tags=["backup-schedule"])
 
@@ -70,6 +71,26 @@ def _get_or_create_entry(db: Session, equipment_code: str, freq: int = 30) -> Ba
     return entry
 
 
+DEFAULT_FREQUENCY_HOURS = 24 * 30
+
+
+def _hours(entry: Optional[BackupScheduleEntry]) -> int:
+    """Backup frequency in hours (older entries stored whole days)."""
+    if not entry:
+        return DEFAULT_FREQUENCY_HOURS
+    return entry.frequency_hours or (entry.frequency_days or 30) * 24
+
+
+def _next_backup(entry: Optional[BackupScheduleEntry]) -> Optional[datetime]:
+    if not entry:
+        return None
+    if entry.next_backup_at:
+        return entry.next_backup_at
+    if entry.next_backup_date:
+        return datetime.combine(entry.next_backup_date, datetime.min.time())
+    return None
+
+
 def _build_row(eq: Equipment, entry: Optional[BackupScheduleEntry]) -> dict:
     backup_path = entry.backup_path if entry else None
     return {
@@ -82,7 +103,8 @@ def _build_row(eq: Equipment, entry: Optional[BackupScheduleEntry]) -> dict:
         "make": eq.make,
         "computer_system_id": eq.computer_system_id,
         # last_backup_date and next_backup_date removed from UI display but kept in dict for internal use
-        "frequency_days": entry.frequency_days if entry else 30,
+        "frequency_hours": _hours(entry),
+        "frequency_days": entry.frequency_days if entry else 30,  # legacy field
         "backup_path": backup_path,
         "notes": entry.notes if entry else None,
         "updated_by": entry.updated_by if entry else None,
@@ -128,13 +150,11 @@ def get_planner(
         entry = db.query(BackupScheduleEntry).filter(
             BackupScheduleEntry.equipment_code == eq.equipment_code
         ).first()
-        if not entry or not entry.next_backup_date:
+        next_at = _next_backup(entry)
+        if not next_at:
             rows.append(_build_row(eq, entry))
             continue
-        next_date = entry.next_backup_date
-        if isinstance(next_date, str):
-            next_date = date.fromisoformat(next_date)
-        if next_date.year == year and (month is None or next_date.month == month):
+        if next_at.year == year and (month is None or next_at.month == month):
             rows.append(_build_row(eq, entry))
     return rows
 
@@ -155,17 +175,30 @@ def update_done(
     if not eq.active:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Equipment is retired")
 
-    freq = int(payload.get("frequency_days", 30))
-    entry = _get_or_create_entry(db, equipment_code, freq)
+    # Frequency is in hours; `frequency_days` is still accepted from older clients
+    if payload.get("frequency_hours") not in (None, ""):
+        hours = int(payload["frequency_hours"])
+    else:
+        hours = int(payload.get("frequency_days") or 30) * 24
+    if hours < 1 or hours > 24 * 366:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Backup frequency must be between 1 hour and 1 year")
+    if payload.get("last_backup_at"):
+        last_at = parse_utc(payload["last_backup_at"])
+    else:
+        last_at = datetime.combine(date.fromisoformat(payload["last_backup_date"]), datetime.min.time())
+    require_not_future_dt(last_at)
 
-    old_freq = entry.frequency_days
+    entry = _get_or_create_entry(db, equipment_code, max(1, hours // 24))
+    old_freq = _hours(entry)
     old_path = entry.backup_path
-    old_last = entry.last_backup_date
+    old_last = entry.last_backup_at or entry.last_backup_date
 
-    last_date = date.fromisoformat(payload["last_backup_date"])
-    entry.last_backup_date = last_date
-    entry.next_backup_date = last_date + timedelta(days=freq)
-    entry.frequency_days = freq
+    entry.last_backup_at = last_at
+    entry.next_backup_at = last_at + timedelta(hours=hours)
+    entry.last_backup_date = last_at.date()
+    entry.next_backup_date = entry.next_backup_at.date()
+    entry.frequency_hours = hours
+    entry.frequency_days = max(1, round(hours / 24))
     entry.notes = payload.get("notes")
     entry.updated_by = current_user.name
 
@@ -179,16 +212,16 @@ def update_done(
     log_audit(
         db, current_user, "BACKUP_UPDATED",
         f"Backup schedule updated for {eq.name} ({equipment_code})" + (f" — {reason}" if reason else ""),
-        entity=equipment_code, field="Last Backup Date",
-        old=old_last, new=last_date,
+        entity=equipment_code, field="Last Backup (UTC)",
+        old=old_last, new=last_at,
         plant=eq.plant,
     )
-    if old_freq != freq:
+    if old_freq != hours:
         log_audit(
             db, current_user, "BACKUP_UPDATED",
             f"Backup frequency changed",
-            entity=equipment_code, field="Frequency (days)",
-            old=str(old_freq), new=str(freq),
+            entity=equipment_code, field="Frequency (hours)",
+            old=str(old_freq), new=str(hours),
             plant=eq.plant, commit=False,
         )
     new_path = entry.backup_path
